@@ -1,0 +1,441 @@
+---
+title: "Community Structure Fungi & Bacteria"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+author: "Briana K. Whitaker"
+date: "`r Sys.Date()`"
+---
+\fontsize{9}{10}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=3.5, fig.height=3,
+                      warning=FALSE, message=FALSE)
+```
+---
+
+* Run using `r version[['version.string']] `.
+
+# OBJECTIVE
+This document reports on the **dataset organization** of the R1 experiment performed in the Fall of 2023 (completed Dec 2023) and R2 experiment performed in the Spring of 2024 (completed June 2024). Data represents the output of Miseq (R1) and NextSeq (R2) sequencing run of the Tri5 Mutant Microbiome project (Guixia Hao & Briana K. Whitaker & Nick Rhoades). 
+
+```{r, echo=FALSE, results='hide', include=FALSE} 
+x<-c("ggplot2", "phyloseq", "dplyr", "RColorBrewer", "viridis",  "Biostrings")
+lapply(x, require, character.only = TRUE)
+
+#set seed
+set.seed(128)
+
+#Load functions
+source("./code/multiplot.function.R")
+`%nin%` = Negate(`%in%`)
+
+# set ggplot2 theme
+theme_set(theme_bw(base_size=12)) 
+theme_update(panel.grid.major=element_line(0), panel.grid.minor=element_line(0))
+
+strain_col <- c("#D95F02", "#7570B3", "#1B9E77") #brewer.pal(3, name = "Dark2")
+
+```
+
+# Load Phyloseq
+```{r}
+load("./data/ps_r1b_curated.RData")
+ps_r1b
+load("./data/ps_r1f_curated.RData")
+ps_r1f
+load("./data/ps_r2b_curated.RData")
+ps_r2b
+load("./data/ps_r2f_curated.RData")
+ps_r2f
+
+```
+
+```{r, include = FALSE}
+# rename 2nd round samples to be intuitive sample ID
+sample_names(ps_r2b) <- ps_r2b@sam_data$Sample_ID[match(sample_names(ps_r2b), rownames(ps_r2b@sam_data)) ]
+sample_names(ps_r2f) <- ps_r2f@sam_data$Sample_ID[match(sample_names(ps_r2f), rownames(ps_r2f@sam_data)) ]
+
+#keep only shared columns
+colKeep <- c("Sample_ID", "I7_Index_ID", "I5_Index_ID", "Kingdom", "Chamber.Rep", "Strain", "Rep")
+ps_r2b@sam_data <- ps_r2b@sam_data[,colKeep]
+ps_r2f@sam_data <- ps_r2f@sam_data[,colKeep]
+
+```
+
+# Examine Mocks
+```{r, results = 'hide'}
+pos_r1b <- subset_samples(ps_r1b, Chamber.Rep == "Control")
+pos_r1b <- filter_taxa(pos_r1b, function(x) mean(x) > 0, TRUE )
+pos_r1b@otu_table
+sum(ps_r1b@otu_table[,"bASV34"])  #"bASV325", 
+##ASV325 only in pos cont, but ASV34 also in  B-J-T5-1-4, B-H-Twn-12, B-H-Twn-10
+ps_r1b@tax_table["bASV34",]  #both ASVs are Bacillus spp., the isolate used in pos cont is Whitaker Lab isolate A30, originally isolated from wheat awns on R2A media
+
+pos_r1f <- subset_samples(ps_r1f, Chamber.Rep == "Control")
+pos_r1f <- filter_taxa(pos_r1f, function(x) mean(x) > 0, TRUE )
+pos_r1f@otu_table 
+pos_r1f@tax_table[colnames(pos_r1f@otu_table), "genus"]
+# Bakker Fungal Mock Even mix of 19spp was used; but 24 tax not 19, and not really evenly amplified
+# 1, 68 = alternaria, 205,268, 296 & 2 more unk Glomeromycota likely Rhizophagus; 
+# 3 Fusarium ASVs & also supposed to be 3 fusarium in mock
+# unk Ceratobasidiaceae likely Rhizoctonia, also an unk Ascomycota that might be one of the missing Ascos
+# 58, 3793 Podila not in mock (this Podila might be the Mortierella in Bakker's orig); 
+# 63 Starmerella not in mock, could this be a mis-IDed Candida?
+# in mock but not amplified [Ascos: Neosartorya, Candida], [Zygos: Mortierella, Rhizomucor]
+
+pos_r2b <- subset_samples(ps_r2b, Chamber.Rep == "")
+pos_r2b <- filter_taxa(pos_r2b, function(x) mean(x) > 0, TRUE )
+pos_r2b@otu_table
+pos_r2b@tax_table[colnames(pos_r2b@otu_table), c("family", "genus")]
+# Zymo bact Mock, of 8 bact spp. (+2 fungal yeasts) was used; but 19 tax not 8, and not as evenly amplified
+# Bacillus 37, 445
+# Enterococcus 53, 689
+# Escherichia 50, 626 
+# Lactobacillus 43, 471
+# Listeria 45, 568
+# Pseudomonas 82, 1369, 3128
+# Salmonella 6, 120, 345 are Enterobacteriaceae and BLAST match Salmonella
+# Staphylococcus 41, 511
+# # likely that ASV3:Erwiniaceae w/ 20 reads is contaminant that was not removed during SCRuB
+ps_r2b@otu_table[,"bASV3"]  #in lots of things, most much > than 20 reads, 16 samples 19 reads or less
+
+pos_r2f <- subset_samples(ps_r2f, Chamber.Rep == "")
+pos_r2f <- filter_taxa(pos_r2f, function(x) mean(x) > 0, TRUE )
+pos_r2f@otu_table 
+pos_r2f@tax_table[colnames(pos_r2f@otu_table), c("family", "genus")]
+# Bakker Fungal Mock Even mix of 19spp was used; but 26 not 19, and not really evenly amplified
+# 1, 68 = alternaria, 205,268, 296 & 2 more unk Glomeromycota likely Rhizophagus; 
+# 3 Fusarium ASVs & also supposed to be 3 fusarium in mock
+# unk Ceratobasidiaceae likely Rhizoctonia, also an unk Ascomycota that might be one of the missing Ascos
+# 58 Podila not in mock (this Podila might be the Mortierella in Bakker's orig); 
+# 63 Starmerella not in mock, could this be a mis-IDed Candida?
+# in mock but not amplified [Ascos: Neosartorya, Candida], [Zygos: Mortierella, Rhizomucor]
+# likely that fASV21:Vishniacozyma w/ 21 reads is contaminant that was not removed during SCRuB
+ps_r2f@otu_table[,"fASV21"]  # only in 2 other samples: J-Tw-12-R2-F & J-PH1-02-R2-F, could just remove this ASV, would not hurt anything. Potentially from lab-bench
+```
+
+### Remove Mocks
+* and contaminants
+```{r, results = 'hide'}
+ps_r1b <- subset_samples(ps_r1b, Chamber.Rep != "Control")
+ps_r1b <- filter_taxa(ps_r1b, function(x) mean(x) > 0, TRUE ) # removes 1 taxa unique to pos.cont.
+
+ps_r1f <- subset_samples(ps_r1f, Chamber.Rep != "Control")
+ps_r1f <- filter_taxa(ps_r1f, function(x) mean(x) > 0, TRUE ) # removes 21 taxa unique to mock
+
+ps_r2b <- subset_samples(ps_r2b, Chamber.Rep != "")
+ps_r2b <- filter_taxa(ps_r2b, function(x) mean(x) > 0, TRUE ) # removes 14 taxa unique to mock 
+out <- as(otu_table(ps_r2b)[,"bASV3"], "matrix")
+otu_table(ps_r2b)[,"bASV3"] <- ifelse(out>20, out-20, 0)
+
+ps_r2f <- subset_samples(ps_r2f, Chamber.Rep != "")
+ps_r2f <- filter_taxa(ps_r2f, function(x) mean(x) > 0, TRUE ) # removes 20 taxa unique to mock
+ps_r2f <- prune_taxa(taxa_names(ps_r2f) != "fASV21", ps_r2f) # remove likely contaminant Vishniacozyma found in mock
+
+```
+
+# Rarefaction Curves (*hidden*)
+* Note, rarefaction curves were run on data before removing non-asymptote samples. 
+```{r, results = 'hide', echo = FALSE, fig.height = 3.5, fig.width = 4.5}
+
+# SbyS_r1b <- (as(otu_table(ps_r1b), "matrix"))
+# SbyS_r1f <- (as(otu_table(ps_r1f), "matrix"))
+# SbyS_r2b <- (as(otu_table(ps_r2b), "matrix"))
+# SbyS_r2f <- (as(otu_table(ps_r2f), "matrix"))
+
+# origmar <- par()$mar
+# pdf("./figures/Rarefaction Curves All.pdf", width=6, height=6)
+# par(mfrow = c(1, 1))
+# #min sqn reads per sample
+# min_depth <- min(rowSums(SbyS_r1b)) ; min_depth   #5
+# cutoff <- 853
+# rarecurve(SbyS_r1b, step=20, label = FALSE, col = 'blue') 
+# abline(v=cutoff, col = "red", lty = 2)
+# min_depth <- min(rowSums(SbyS_r1f)) ; min_depth   #3
+# cutoff <- 51
+# rarecurve(SbyS_r1f, step=20, label = FALSE, col = 'blue')
+# abline(v=cutoff, col = "red", lty = 2)
+# min_depth <- min(rowSums(SbyS_r2b)) ; min_depth   #271
+# rarecurve(SbyS_r2b, step=20, label = FALSE, col = 'blue') 
+# abline(v=min_depth, col = "red", lty = 2)
+# min_depth <- min(rowSums(SbyS_r2f)) ; min_depth   #58
+# rarecurve(SbyS_r2f, step=20, label = FALSE, col = 'blue')
+# abline(v=min_depth, col = "red", lty = 2)
+# dev.off()
+# par(mar = origmar)
+
+
+## sub <- names(sort(rowSums(SbyS_r2f))[1:25])
+## SbyS_r2f_sub <- SbyS_r2f[sub,]
+## rarecurve(SbyS_r2f_sub, step=20, label = TRUE, col = 'blue' )
+## sub <- names(sort(rowSums(SbyS_r1f))[1:18])
+## SbyS_r1f_sub <- SbyS_r1f[sub,]
+## rarecurve(SbyS_r1f_sub, step=20, label = TRUE, col = 'blue' )
+
+```
+
+* r1b - B-H-T5-1-4,  B-H-T5-1-3, & B-H-T5-1-12 #these 3 samples did not asymptote or come close
+* r1f - 10 samples below 51 reads; everything > 51 reads either asymptotes, or only has 1 ASV (Fusarium) and no good way to judge if it asymptotes. All low depth samples are Tween treatment.
+* r2b - all asymptoted, even the low depth
+* r2f - all asymptoted
+* for fungi, definitely a depth bias by the Tween treatment group, in both rounds
+
+
+### Remove Low Depth Samples
+```{r, results = 'hide'}
+prune_r1b <- c("B-H-T5-1-4", "B-H-T5-1-3", "B-H-T5-1-12")
+ps_r1b <- prune_samples(sample_names(ps_r1b) %nin% prune_r1b, ps_r1b)
+ps_r1b <- filter_taxa(ps_r1b, function(x) mean(x) > 0, TRUE )  # 4 taxa removed
+
+prune_r1f <- names(sort(rowSums(otu_table(ps_r1f)))[1:10])
+ps_r1f <- prune_samples(sample_names(ps_r1f) %nin% prune_r1f, ps_r1f)
+ps_r1f <- filter_taxa(ps_r1f, function(x) mean(x) > 0, TRUE )  # 4 taxa removed
+
+```
+
+
+# Reorder & Rename ASVs
+* Merge by kingdom, then reorder ASVs by abundance and rename to smaller ASVs numbers unique to this project and not inclusive of the HackFlex test or Barley endos project.
+```{r, include = FALSE}
+#### Bacteria
+#identical(as.character(ps_r1b@refseq[1,]), as.character(ps_r2b@refseq[1,]))
+ps_r1b@sam_data$Round <- as.factor("R1")
+ps_r2b@sam_data$Round <- as.factor("R2")
+ps_b0 <-  merge_phyloseq(ps_r1b, ps_r2b)
+ps_b0
+
+# make sequences the names of the ps objects
+dna_b0 <- data.frame(name = names(ps_b0@refseq), seq = unname(as.character(ps_b0@refseq)))
+taxa_names(ps_b0) <- dna_b0$seq[ match(taxa_names(ps_b0), dna_b0$name) ]
+ps_b0
+
+#reorder taxa by abundance
+abunOrder_b <- names(sort(colSums(ps_b0@otu_table), decreasing = TRUE))
+abundances_b <- unname(sort(colSums(ps_b0@otu_table), decreasing = TRUE))
+ps_b0@otu_table <- ps_b0@otu_table[, abunOrder_b]
+ps_b0@tax_table <- ps_b0@tax_table[abunOrder_b, ]
+ps_b0@refseq <- ps_b0@refseq[names(ps_b0@refseq)[match(abunOrder_b, names(ps_b0@refseq))] ]
+
+#rename taxa
+ps_b <- ps_b0
+taxa_names(ps_b) <- paste0("ASV", seq(1,length(taxa_names(ps_b))))
+#identical(unname(colSums(ps_b@otu_table)), abundances_b) #sanity check
+ps_b
+
+#### Fungi
+#identical(as.character(ps_r1f@refseq[1,]), as.character(ps_r2f@refseq[1,]))
+ps_r1f@sam_data$Round <- as.factor("R1")
+ps_r2f@sam_data$Round <- as.factor("R2")
+ps_f0 <-  merge_phyloseq(ps_r1f, ps_r2f)
+ps_f0
+
+# make sequences the names of the ps objects
+dna_f0 <- data.frame(name = names(ps_f0@refseq), seq = unname(as.character(ps_f0@refseq)))
+taxa_names(ps_f0) <- dna_f0$seq[ match(taxa_names(ps_f0), dna_f0$name) ]
+ps_f0
+
+#reorder taxa by abundance
+abunOrder_f <- names(sort(colSums(ps_f0@otu_table), decreasing = TRUE))
+abundances_f <- unname(sort(colSums(ps_f0@otu_table), decreasing = TRUE))
+ps_f0@otu_table <- ps_f0@otu_table[, abunOrder_f]
+ps_f0@tax_table <- ps_f0@tax_table[abunOrder_f, ]
+ps_f0@refseq <- ps_f0@refseq[names(ps_f0@refseq)[match(abunOrder_f, names(ps_f0@refseq))] ]
+
+#rename taxa
+ps_f <- ps_f0
+taxa_names(ps_f) <- paste0("ASV", seq(1,length(taxa_names(ps_f))))
+#identical(unname(colSums(ps_f@otu_table)), abundances_f) #sanity check
+ps_f
+```
+
+### Examine Sample Depth & ASV abundance
+```{r, echo = FALSE, fig.height = 5, fig.width = 6}
+par(mfrow = c(2,2))
+hist(log10(colSums(ps_b@otu_table)))
+hist(log10(rowSums(ps_b@otu_table)))
+
+hist(log10(colSums(ps_f@otu_table)))
+hist(log10(rowSums(ps_b@otu_table)))
+
+```
+
+
+# Look at Disease Data
+```{r, echo = FALSE, results = 'hide', fig.keep = 'all', fig.height = 4, fig.width =4}
+# disease symptoms measured at the head level
+disHeads_r1 <- read.csv("./data/Tri5MB_R1_diseaseHeads.csv", stringsAsFactors = TRUE)
+disHeads_r1$Head <- as.factor(disHeads_r1$Head)
+disHeads_r1 <- disHeads_r1[disHeads_r1$Notes == "",] # remove non-harvested head
+
+disHeads_r2 <- read.csv("./data/Tri5MB_R2_diseaseHeads.csv", stringsAsFactors = TRUE)
+disHeads_r2$Head <- as.factor(disHeads_r2$Head)
+disHeads_r2 <- disHeads_r2[disHeads_r2$Notes == "",] # remove non-harvested heads
+
+ggplot(disHeads_r1, aes(x = Chamber, y = disP.d7, fill = Strain)) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(position=position_jitterdodge(jitter.width = 0.2)) +
+    scale_fill_manual(values = strain_col)
+ggplot(disHeads_r1, aes(x = Chamber, y = head.mass.g, fill = Strain)) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(position=position_jitterdodge(jitter.width = 0.2)) +
+    scale_fill_manual(values = strain_col)
+
+ggplot(disHeads_r2, aes(x = Chamber, y = disP.d7, fill = Strain)) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(position=position_jitterdodge(jitter.width = 0.2)) +
+    scale_fill_manual(values = strain_col)
+ggplot(disHeads_r2, aes(x = Chamber, y = head.mass.g, fill = Strain)) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(position=position_jitterdodge(jitter.width = 0.2)) +
+    scale_fill_manual(values = strain_col)
+
+
+# disease symptoms measured at the tube level (also matches Microbiome data)
+disTubes_r1 <- read.csv("./data/Tri5MB_R1_diseaseTubes.csv", stringsAsFactors = TRUE)
+disTubes_r1$TubeNum <- as.factor(disTubes_r1$TubeNum)
+disTubes_r1$Notes <- as.factor(disTubes_r1$Notes)
+rownames(disTubes_r1) <- disTubes_r1$B_ID
+disTubes_r2 <- read.csv("./data/Tri5MB_R2_diseaseTubes.csv", stringsAsFactors = TRUE)
+disTubes_r2$TubeNum <- as.factor(disTubes_r2$TubeNum)
+disTubes_r2 <- disTubes_r2[disTubes_r2$Notes == "",] # remove tubes with contamination from outside
+rownames(disTubes_r2) <- disTubes_r2$B_ID
+
+
+ggplot(disTubes_r1, aes(x = Chamber, y = ugDON_per_g, fill = Treatment)) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(position=position_jitterdodge(jitter.width = 0.2)) +
+    scale_fill_manual(values = strain_col)
+ggplot(disTubes_r1, aes(x = Chamber, y = FgTa_ratio, fill = Treatment)) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(position=position_jitterdodge(jitter.width = 0.2)) +
+    scale_fill_manual(values = strain_col)
+
+
+ggplot(disTubes_r2, aes(x = Chamber, y = ugDON_per_g, fill = Treatment)) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(position=position_jitterdodge(jitter.width = 0.2)) +
+    scale_fill_manual(values = strain_col)
+ggplot(disTubes_r2, aes(x = Chamber, y = FgTa_ratio, fill = Treatment)) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(position=position_jitterdodge(jitter.width = 0.2)) +
+    scale_fill_manual(values = strain_col)
+
+# drop columns
+disTubes_r1 %>% dplyr::select(B_ID, F_ID, HeadNumsInTube, Fg_gm, Ta_gm, FgTa_ratio, ugDON_per_g, Notes) -> disTubes_r1
+disTubes_r2 %>% dplyr::select(B_ID, F_ID, HeadNumsInTube, Fg_gm, Ta_gm, FgTa_ratio, ugDON_per_g, Notes) -> disTubes_r2
+
+```
+
+### Merge diseease data to ps
+```{r, include = FALSE}
+rm(ps_r1b, ps_r1f, ps_r2b, ps_r2f)
+
+#unmerge by round
+ps_r1b <- subset_samples(ps_b, ps_b@sam_data$Round == "R1")
+ps_r1b <- filter_taxa(ps_r1b, function(x) mean(x) > 0, TRUE ) 
+ps_r2b <- subset_samples(ps_b, ps_b@sam_data$Round == "R2")
+ps_r2b <- filter_taxa(ps_r2b, function(x) mean(x) > 0, TRUE ) 
+
+ps_r1f <- subset_samples(ps_f, ps_f@sam_data$Round == "R1")
+ps_r1f <- filter_taxa(ps_r1f, function(x) mean(x) > 0, TRUE ) 
+ps_r2f <- subset_samples(ps_f, ps_f@sam_data$Round == "R2")
+ps_r2f <- filter_taxa(ps_r2f, function(x) mean(x) > 0, TRUE ) 
+
+# sanity checks
+table(ps_r1b@sam_data$Sample_ID %in% disTubes_r1$B_ID)
+table(ps_r1f@sam_data$Sample_ID %in% disTubes_r1$F_ID)
+table(ps_r2b@sam_data$Sample_ID %in% disTubes_r2$B_ID)
+table(ps_r2f@sam_data$Sample_ID %in% disTubes_r2$F_ID)
+
+# merge disease data
+SbyE_r1b <- merge( as(sample_data(ps_r1b), "data.frame"), disTubes_r1, 
+      by.x = "Sample_ID", by.y = "B_ID")
+rownames(SbyE_r1b) <- SbyE_r1b$Sample_ID
+sample_data(ps_r1b) <- sample_data(SbyE_r1b)
+SbyE_r1f <- merge( as(sample_data(ps_r1f), "data.frame"), disTubes_r1, 
+      by.x = "Sample_ID", by.y = "F_ID")
+rownames(SbyE_r1f) <- SbyE_r1f$Sample_ID
+sample_data(ps_r1f) <- sample_data(SbyE_r1f)
+
+SbyE_r2b <- merge( as(sample_data(ps_r2b), "data.frame"), disTubes_r2, 
+      by.x = "Sample_ID", by.y = "B_ID")
+rownames(SbyE_r2b) <- SbyE_r2b$Sample_ID
+sample_data(ps_r2b) <- sample_data(SbyE_r2b)
+SbyE_r2f <- merge( as(sample_data(ps_r2f), "data.frame"), disTubes_r2, 
+      by.x = "Sample_ID", by.y = "F_ID")
+rownames(SbyE_r2f) <- SbyE_r2f$Sample_ID
+sample_data(ps_r2f) <- sample_data(SbyE_r2f)
+```
+
+```{r}
+# save(ps_r1b, file="./data/ps_r1b_curated2.RData")
+# save(ps_r1f, file="./data/ps_r1f_curated2.RData")
+# save(ps_r2b, file="./data/ps_r2b_curated2.RData")
+# save(ps_r2f, file="./data/ps_r2f_curated2.RData")
+
+load("./data/ps_r1b_curated2.RData"); ps_r1b
+load("./data/ps_r1f_curated2.RData"); ps_r1f
+load("./data/ps_r2b_curated2.RData"); ps_r2b
+load("./data/ps_r2f_curated2.RData"); ps_r2f
+
+```
+
+
+```{r session}
+sessionInfo()
+```
+
+
+```{r, include = FALSE}
+# R version 4.4.2 (2024-10-31)
+# Platform: x86_64-apple-darwin20
+# Running under: macOS Monterey 12.7.4
+# 
+# Matrix products: default
+# BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
+# LAPACK: /Library/Frameworks/R.framework/Versions/4.4-x86_64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.0
+# 
+# locale:
+# [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+# 
+# time zone: America/Chicago
+# tzcode source: internal
+# 
+# attached base packages:
+# [1] stats4    stats     graphics  grDevices utils     datasets  methods   base     
+# 
+# other attached packages:
+#  [1] Biostrings_2.74.1   GenomeInfoDb_1.42.3 XVector_0.46.0      IRanges_2.40.1     
+#  [5] S4Vectors_0.44.0    BiocGenerics_0.52.0 viridis_0.6.5       viridisLite_0.4.2  
+#  [9] RColorBrewer_1.1-3  dplyr_1.1.4         phyloseq_1.50.0     ggplot2_4.0.0      
+# 
+# loaded via a namespace (and not attached):
+#  [1] gtable_0.3.6            rhdf5_2.50.2            Biobase_2.66.0         
+#  [4] lattice_0.22-7          rhdf5filters_1.18.1     vctrs_0.6.5            
+#  [7] tools_4.4.2             generics_0.1.4          biomformat_1.34.0      
+# [10] parallel_4.4.2          tibble_3.3.0            cluster_2.1.8.1        
+# [13] pkgconfig_2.0.3         Matrix_1.7-4            data.table_1.17.8      
+# [16] S7_0.2.0                lifecycle_1.0.4         GenomeInfoDbData_1.2.13
+# [19] compiler_4.4.2          farver_2.1.2            stringr_1.5.2          
+# [22] codetools_0.2-20        permute_0.9-8           pillar_1.11.1          
+# [25] crayon_1.5.3            MASS_7.3-65             vegan_2.7-1            
+# [28] iterators_1.0.14        foreach_1.5.2           nlme_3.1-168           
+# [31] tidyselect_1.2.1        digest_0.6.37           stringi_1.8.7          
+# [34] reshape2_1.4.4          labeling_0.4.3          splines_4.4.2          
+# [37] ade4_1.7-23             grid_4.4.2              cli_3.6.5              
+# [40] magrittr_2.0.4          survival_3.8-3          ape_5.8-1              
+# [43] withr_3.0.2             scales_1.4.0            UCSC.utils_1.2.0       
+# [46] httr_1.4.7              igraph_2.1.4            multtest_2.62.0        
+# [49] gridExtra_2.3           mgcv_1.9-3              rlang_1.1.6            
+# [52] Rcpp_1.1.0              glue_1.8.0              jsonlite_2.0.0         
+# [55] R6_2.6.1                Rhdf5lib_1.28.0         plyr_1.8.9             
+# [58] zlibbioc_1.52.0
+
+```
+
+
+##### end
