@@ -26,7 +26,8 @@ This document reports on the **differential abundance analysis** of the R1 exper
 
 
 ```{r PRELOAD, echo=FALSE, results='hide', include=FALSE} 
-x<-c("ggplot2", "phyloseq", "DESeq2",  "tidyr", "dplyr", "ggVennDiagram", "Biostrings")
+x<-c("ggplot2", "phyloseq", "DESeq2",  "tidyr", "dplyr", "ggVennDiagram", "Biostrings",
+     "reshape2", "ComplexHeatmap")
 lapply(x, require, character.only = TRUE)
 
 #Load functions
@@ -307,7 +308,6 @@ b0
 
 # Heatmap
 ```{r}
-require(reshape2)
 out %>% 
     mutate(Var = paste(Contrast, RepKing, sep = "-")) %>% 
     select(Var, simple_name, log2FoldChange) -> out2 #RepKing, 
@@ -321,7 +321,7 @@ sub_dist <- cor(sub_w, method = 'pearson')
 sub_clust <- hclust(as.dist(sub_dist), method = "ward.D2")
 
 par(mfrow = c(1,1)); plot(sub_clust)
-require(ComplexHeatmap)
+
 #require(gclus)
 #sub_clust_k2 <- kmeans(sub_clust, centers = 3, nstart = 1000, iter.max = 10)
 
@@ -343,279 +343,6 @@ Heatmap(sub_w,
 #c("#CC79A7", "#D55E00", "#0072B2", "#F0E442", "#009E73", "#56B4E9", "#E69F00", "#000000")
 
 ```
-
-# correlations?
-
-```{r}
-require(stringr)
-require(vegan)
-
-# create df
-SbyE_r1b <- (as(sample_data(ps_r1b), "data.frame"))
-SbyS_r1b <- (as(otu_table(ps_r1b), "matrix"))
-SbyS_rel_r1b <- decostand(SbyS_r1b, method = 'hellinger')
-# identify signif ASVs
-signif_r1b <- unique(sub$ASV[sub$RepKing=="R1-Bacteria"])
-signif_r1b <- str_extract(signif_r1b, "(?<=b).*")
-# merge & convert to long format
-identical(rownames(SbyS_rel_r1b), rownames(SbyE_r1b)) #sanity check
-SbyE_r1b <- data.frame(SbyE_r1b ,SbyS_rel_r1b[,signif_r1b])
-SbyE_l_r1b <- SbyE_r1b %>% 
-    select(Sample_ID,Chamber.Rep, Strain, FgTa_ratio, ugDON_per_g, contains('ASV')) %>%
-    pivot_longer(cols = contains("ASV"), names_to = "ASV", values_to = "Relative_Abundance")
-
-# create df
-SbyE_r2b <- (as(sample_data(ps_r2b), "data.frame"))
-SbyS_r2b <- (as(otu_table(ps_r2b), "matrix"))
-SbyS_rel_r2b <- decostand(SbyS_r2b, method = 'hellinger')
-# identify signif ASVs
-signif_r2b <- unique(sub$ASV[sub$RepKing=="R2-Bacteria"])
-signif_r2b <- str_extract(signif_r2b, "(?<=b).*")
-# merge & convert to long format
-identical(rownames(SbyS_rel_r2b), rownames(SbyE_r2b)) #sanity check
-SbyE_r2b <- data.frame(SbyE_r2b ,SbyS_rel_r2b[,signif_r2b])
-SbyE_l_r2b <- SbyE_r2b %>% 
-    select(Sample_ID,Chamber.Rep, Strain, FgTa_ratio, ugDON_per_g, contains('ASV')) %>%
-    pivot_longer(cols = contains("ASV"), names_to = "ASV", values_to = "Relative_Abundance")
-
-# create df
-SbyE_r2f <- (as(sample_data(ps_r2f), "data.frame"))
-SbyS_r2f <- (as(otu_table(ps_r2f), "matrix"))
-SbyS_rel_r2f <- decostand(SbyS_r2f, method = 'hellinger')
-# identify signif ASVs
-signif_r2f <- unique(sub$ASV[sub$RepKing=="R2-Fungi"])
-signif_r2f <- str_extract(signif_r2f, "(?<=f).*")
-# merge & convert to long format
-identical(rownames(SbyS_rel_r2f), rownames(SbyE_r2f)) #sanity check
-SbyE_r2f <- data.frame(SbyE_r2f ,SbyS_rel_r2f[,signif_r2f])
-SbyE_l_r2f <- SbyE_r2f %>% 
-    select(Sample_ID,Chamber.Rep, Strain, FgTa_ratio, ugDON_per_g, contains('ASV')) %>%
-    pivot_longer(cols = contains("ASV"), names_to = "ASV", values_to = "Relative_Abundance")
-
-
-
-# plots
-ggplot(SbyE_l_r1b, aes(x = ugDON_per_g, y = Relative_Abundance)) +
-    facet_wrap(.~ASV, scales = "free_y") +
-    scale_x_continuous(trans = "sqrt") +
-    geom_point() + 
-    geom_smooth(method = 'glm', formula = 'y ~ x')
-ggplot(SbyE_l_r1b, aes(x = FgTa_ratio, y = Relative_Abundance)) +
-    facet_wrap(.~ASV, scales = "free_y") +
-    scale_x_continuous(trans = "sqrt") +
-    geom_point() + 
-    geom_smooth(method = 'glm', formula = 'y ~ x')
-
-ggplot(SbyE_l_r2b, aes(x = ugDON_per_g, y = Relative_Abundance)) +
-    facet_wrap(.~ASV, scales = "free_y") +
-    scale_x_continuous(trans = "sqrt") +
-    geom_point() + 
-    geom_smooth(method = 'glm', formula = 'y ~ x')
-ggplot(SbyE_l_r2b, aes(x = FgTa_ratio, y = Relative_Abundance)) +
-    facet_wrap(.~ASV, scales = "free_y") +
-    scale_x_continuous(trans = "sqrt") +
-    geom_point() + 
-    geom_smooth(method = 'glm', formula = 'y ~ x')
-
-ggplot(SbyE_l_r2f, aes(x = ugDON_per_g, y = Relative_Abundance)) +
-    facet_wrap(.~ASV, scales = "free_y") +
-    scale_x_continuous(trans = "sqrt") +
-    geom_point() + 
-    geom_smooth(method = 'glm', formula = 'y ~ x')
-ggplot(SbyE_l_r2f, aes(x = FgTa_ratio, y = Relative_Abundance)) +
-    facet_wrap(.~ASV, scales = "free_y") +
-    scale_x_continuous(trans = "sqrt") +
-    geom_point() + 
-    geom_smooth(method = 'glm', formula = 'y ~ x')
-```
-
-
-
-
-
-
-# older stuff -->
-
-### Mean Abundance
-* not included
-```{r, include = FALSE}
-l2fc$baseMean_01 <- (l2fc$baseMean + 0.01) #1377 0s in dataset, but next lowest value is 0.012
-ma_plot <- ggplot(l2fc, 
-       aes(x = baseMean_01, y = log2FoldChange, 
-           colour = significant, alpha = significant, size = significant)) + 
-    facet_grid(Contrast~RepKing, scales = "free_y") +
-    geom_hline(yintercept = 0, colour="black", linewidth=1, linetype = 1) + 
-    geom_hline(yintercept = 2, colour="coral3", linewidth=1, linetype = 3) + 
-    geom_hline(yintercept = -2, colour="coral3", linewidth=1, linetype = 3) + 
-    geom_point() + 
-    scale_y_continuous("Log2 Fold Change") +   #limits=c(-3, 3) #, oob=squish
-    scale_x_continuous("Mean of Normalized Counts", trans = "log10") + 
-    scale_colour_manual("", values=c("Significant" = "#D95F02"), na.value= "#666666") + 
-    scale_alpha_manual("", values=c("Significant"= 1), na.value= 0.4) +
-    scale_size_manual("", values=c("Significant"= 3), na.value= 1) +
-    geom_text(data = l2fc %>% filter(significant == "Significant"),
-      aes(label = ASV), size = 3.5,
-            nudge_x = -0.7, nudge_y = -0.5) +
-    theme(legend.position = "bottom",
-       legend.title = element_blank())
-#tiff("./figures/DA_meanAbundancePlot-filtered.tiff", width=12, height=10, units="in", res=300)
-ma_plot
-#dev.off()
-```
-
-```{r, include = FALSE}
-# ma plot by RepKing
-ggplot(l2fc %>% filter(RepKing == "r2f"), 
-       aes(x = baseMean_01, y = log2FoldChange, 
-           colour = significant, alpha = significant, size = significant)) + 
-    facet_grid(.~Contrast, scales = "free_y") +
-    geom_hline(yintercept = 0, colour="black", linewidth=1, linetype = 1) + 
-    geom_hline(yintercept = 2, colour="coral3", linewidth=1, linetype = 3) + 
-    geom_hline(yintercept = -2, colour="coral3", linewidth=1, linetype = 3) + 
-    geom_point() + 
-    scale_y_continuous("Log2 Fold Change") +   #limits=c(-3, 3) #, oob=squish
-    scale_x_continuous("Mean of Normalized Counts", trans = "log10") + 
-    scale_colour_manual("", values=c("Significant" = "#D95F02"), na.value= "#666666") + 
-    scale_alpha_manual("", values=c("Significant"= 1), na.value= 0.4) +
-    scale_size_manual("", values=c("Significant"= 3), na.value= 1) +
-    geom_text(data = l2fc %>% filter(significant == "Significant") %>% filter(RepKing == "r2f"),
-      aes(label = simple_name), size = 2.5,
-            nudge_x = -0.7, nudge_y = -0.9) +
-    theme(legend.position = "bottom",
-       legend.title = element_blank())
-
-```
-
-### by Phylum
-```{r, results = 'hide', echo = FALSE, fig.width = 9, fig.height = 5}
-# add a column that combines info from phylum and significance
-l2fc$phylumSignif <- character(length(l2fc$significant))
-for(x in 1:length(l2fc$significant)) {
-    #x <- 2
-    if(is.na(l2fc$significant[x])) {
-        l2fc$phylumSignif[x] <- "NA"
-    } else {
-        l2fc$phylumSignif[x] <- l2fc$phylum[x]
-    }
-}
-#l2fc$phylumSignif
-
-#Actinobacteriota, Bacteroidota, Firmicutes, Proteobacteria, Ascomycota, Basidiomycota
-
-taxa_col <- c("#377EB8", "#D95F02", "#1B9E77", "#E7298A", "#7570B3", "grey80")   # "#66A61E",
-#DA_effects <- 
-ggplot(l2fc, 
-       aes(x = Contrast, y = log2FoldChange, colour = phylumSignif, size = significant)) + 
-  facet_grid(.~ RepKing) +
-  geom_hline(yintercept = 0, colour="grey30", linewidth=1, linetype = 2) +
-  geom_jitter( width = .3, height = 0) + #size = 1.5,
-  scale_y_continuous(expression(paste("Log"[2]," Fold Change"))) +
-  scale_x_discrete("Expt. Replicate and Microbial Domain") +
-  scale_colour_manual("Phylum", values=taxa_col, na.value= "grey80") +
-  scale_size_manual(values=c("Significant"=3), na.value= 0.8) +
-  guides(size = 'none', colour = guide_legend(override.aes = list(size=3))) #+
-  #geom_text(data = l2fc %>% filter(significant == "Significant"),
-  #  aes(label = simple_name), size = 3.5, nudge_x = 0.1, nudge_y = -0.9)
-```
-
-
-### Venn Diagrams
-```{r, echo = FALSE, results = 'hide', fig.width = 9, fig.height = 5}
-#dim(l2fc_signif)
-
-### identify sets (sets of microbes significant for different treatment combos)
-r1b_PTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1b" & l2fc_signif$Contrast == "PH1_Cont"]); length(r1b_PTw)  #12  9 (filtered)
-r1b_TTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1b" & l2fc_signif$Contrast == "Tri5_Cont"]); length(r1b_TTw) #6  5 (filtered)
-r1b_PT  <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1b" & l2fc_signif$Contrast == "PH1_Tri5"]); length(r1b_PT)    #10  7 (filtered)
-
-r2b_PTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2b" & l2fc_signif$Contrast == "PH1_Cont"]); length(r2b_PTw)  #16  8 (filtered)
-r2b_TTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2b" & l2fc_signif$Contrast == "Tri5_Cont"]); length(r2b_TTw) #10  3 (filtered)
-r2b_PT  <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2b" & l2fc_signif$Contrast == "PH1_Tri5"]); length(r2b_PT)    #19  10 (filtered)
-
-r1f_PTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1f" & l2fc_signif$Contrast == "PH1_Cont"]); length(r1f_PTw)  #2  
-r1f_TTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1f" & l2fc_signif$Contrast == "Tri5_Cont"]); length(r1f_TTw) #2  
-r1f_PT  <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1f" & l2fc_signif$Contrast == "PH1_Tri5"]); length(r1f_PT)    #0  
-
-r2f_PTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2f" & l2fc_signif$Contrast == "PH1_Cont"]); length(r2f_PTw)  #19  11 (filtered)
-r2f_TTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2f" & l2fc_signif$Contrast == "Tri5_Cont"]); length(r2f_TTw) #19  10 (filtered)
-r2f_PT  <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2f" & l2fc_signif$Contrast == "PH1_Tri5"]); length(r2f_PT)    #11  6 (filtered)
-
-### create set lists for Venn Diagram
-r1b_set <- list(PH1_Cont = r1b_PTw, Tri5_Cont = r1b_TTw, PH1_Tri5 = r1b_PT) 
-#r1f_set    #too little data
-r2b_set <- list(PH1_Cont = r2b_PTw, Tri5_Cont = r2b_TTw, PH1_Tri5 = r2b_PT) 
-r2f_set <- list(PH1_Cont = r2f_PTw, Tri5_Cont = r2f_TTw, PH1_Tri5 = r2f_PT) 
-
-o1 <- ggVennDiagram(r1b_set, label = "count", col = "gray", label_alpha = 0, label_size = 4) +
-    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
-    guides(fill = 'none') +
-    scale_color_manual(values = c(rep("black",4))) +
-    scale_x_continuous(expand = expansion(mult = .2)) +
-    ggtitle("R1 Bact.")
-#bASV38, bASV54 are significantly enriched in all treatments (though I guess this method does not tell you in which direction)
-
-o2 <- ggVennDiagram(r2b_set, label = "count", col = "gray", label_alpha = 0, label_size = 4) +
-    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
-    guides(fill = 'none') +
-    scale_color_manual(values = c(rep("black",4))) +
-    scale_x_continuous(expand = expansion(mult = .2)) +
-    ggtitle("R2 Bact.")
-#bASV51 enriched in all comparisons 
-
-o3 <- ggVennDiagram(r2f_set, label = "count", col = "gray", label_alpha = 0, label_size = 4) +
-    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
-    guides(fill = 'none') +
-    scale_color_manual(values = c(rep("black",4))) +
-    scale_x_continuous(expand = expansion(mult = .2)) +
-    ggtitle("R2 Fungi")
-#fASV16, fASV22, fASV28, enriched in all comparisons 
-
-multiplot(o1,o2,o3, cols = 3)
-```
-
-#### Notes for MS - investigate ASVs shared across contrasts/rounds
-```{r}
-# # investigate the ASVs shared across all 3 contrasts
-# shared3_r1b <- c("bASV38", "bASV54"). #both taxa have potentially consistent results
-# shared3_r2b <- c( "bASV51") # all consistent (baseed on l2fc values)
-# shared3_r2f <- c( "fASV16", "fASV22",  "fASV28") #consistent
-# 
-# l2fc_signif %>% filter(RepKing == "r1b") %>% filter(Taxon %in% shared3_r1b) %>%
-#     select(Taxon,Contrast, log2FoldChange, baseMean, phylum,simple_name) 
-# 
-# l2fc_signif %>% filter(RepKing == "r2b") %>% filter(Taxon %in% shared3_r2b) %>%
-#     select(Taxon,Contrast, log2FoldChange, baseMean, phylum,simple_name) 
-# 
-# l2fc_signif %>% filter(RepKing == "r2f") %>% filter(Taxon %in% shared3_r2f) %>%
-#     select(Taxon,Contrast, log2FoldChange, baseMean, phylum,simple_name) %>% arrange(Taxon)
-
-```
-
-* conclusion: no strong pattern for most shared enrichments between contrasts
-
-```{r}
-### comparing contrasts across experimental rounds
-PTw_set <- list(r1b = r1b_PTw, r2b = r2b_PTw)
-ggVennDiagram(PTw_set, label = "count", col = "gray", label_alpha = 0) +
-    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
-    guides(fill = 'none') +
-    scale_color_manual(values = c(rep("black",4)))
-
-TTw_set <- list(r1b = r1b_TTw, r2b = r2b_TTw)
-ggVennDiagram(TTw_set, label = "count", col = "gray", label_alpha = 0) +
-    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
-    guides(fill = 'none') +
-    scale_color_manual(values = c(rep("black",4)))
-
-PT_set <- list(r1b = r1b_PT, r2b = r2b_PT)
-ggVennDiagram(PT_set, label = "count", col = "gray", label_alpha = 0) +
-    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
-    guides(fill = 'none') +
-    scale_color_manual(values = c(rep("black",4)))
-```
-
-* CONCLUDE: ASV5:Enterobacteriaceae is the only bacteria that is enriched in same treatment comparison between the two experimental rounds, (PH1 vs Cont, enriched in Control)
-* not possible to test adequately for fungi
 
 
 ```{r}
