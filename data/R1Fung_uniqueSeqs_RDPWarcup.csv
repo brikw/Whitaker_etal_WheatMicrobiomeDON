@@ -1,0 +1,67 @@
+,ASV,dir,domain,conf.d,phylum,conf.p,class,conf.c,order,conf.o,family,conf.f,genus,conf.g,species,conf.s
+1,fASV1,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Nectriaceae,1,Gibberella,0.98,Fusarium asiaticum,0.6
+2,fASV2,,Fungi,1,Ascomycota,1,Dothideomycetes,1,Pleosporales,1,Pleosporaceae,1,Alternaria,1,Alternaria longipes,0.5
+3,fASV3,,Fungi,1,Basidiomycota,1,Tremellomycetes,1,Tremellales,1,Tremellaceae,1,Cryptococcus,1,Cryptococcus albidus sp 2,0.55
+4,fASV4,,Fungi,1,Ascomycota,1,Saccharomycetes,1,Saccharomycetales,1,Saccharomycetaceae,1,Saccharomyces,1,Saccharomyces cerevisiae,0.33
+5,fASV5,,Fungi,1,Basidiomycota,1,Agaricomycetes,1,Cantharellales,1,Ceratobasidiaceae,1,Ceratobasidium,0.62,Ceratobasidium sp AG_E,0.41
+6,fASV6,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Nectriaceae,1,Gibberella,0.96,Fusarium asiaticum,0.58
+7,fASV7,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Nectriaceae,1,Gibberella,1,Fusarium oxysporum f sp lilii,0.34
+8,fASV8,,Fungi,1,Ascomycota,1,Saccharomycetes,1,Saccharomycetales,1,Saccharomycetales_Incertae sedis,1,Candida,1,Candida apicola,1
+9,fASV9,,Fungi,1,Chytridiomycota,0.14,Chytridiomycetes,0.14,Spizellomycetales,0.14,Spizellomycetaceae,0.14,Spizellomyces,0.09,Spizellomyces plurigibbosus,0.09
+10,fASV10,,Fungi,1,Zygomycota,1,Mucoromycotina_Incertae sedis,1,Mortierellales,1,Mortierellaceae,1,Mortierella,1,Mortierella humilis,1
+11,fASV11,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Nectriaceae,1,Gibberella,1,Fusarium pseudonygamai,0.84
+12,fASV12,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Hypocreaceae,1,Hypocrea,1,Hypocrea schweinitzii,0.45
+13,fASV13,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Hypocreales_Incertae sedis,0.98,Sarocladium,0.94,Sarocladium oryzae,0.79
+14,fASV14,,Fungi,1,Basidiomycota,1,Ustilaginomycetes,1,Ustilaginales,1,Ustilaginaceae,1,Ustilago,1,Pseudozyma prolifica,1
+15,fASV15,,Fungi,1,Glomeromycota,1,Glomeromycetes,1,Glomerales,1,Glomeraceae,1,Rhizophagus,1,Rhizophagus irregularis DAOM 181602,0.78
+16,fASV16,,Fungi,1,Ascomycota,1,Eurotiomycetes,1,Eurotiales,1,Trichocomaceae,1,Penicillium,0.96,Penicillium oxalicum,0.92
+17,fASV17,,Fungi,1,Ascomycota,1,Eurotiomycetes,1,Eurotiales,1,Trichocomaceae,1,Eupenicillium,0.97,Penicillium citreonigrum,0.91
+18,fASV18,,Fungi,1,Basidiomycota,1,Agaricomycetes,1,Polyporales,0.73,Sistotremataceae,0.73,Sistotrema,0.73,Sistotrema alboluteum,0.73
+19,fASV19,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Clavicipitaceae,1,Claviceps,1,Claviceps purpurea,0.99
+20,fASV20,,Fungi,1,Ascomycota,1,Dothideomycetes,1,Capnodiales,1,Mycosphaerellaceae,1,Davidiella,0.99,Cladosporium pseudocladosporioides,0.2
+21,fASV21,,Fungi,1,Ascomycota,1,Dothideomycetes,1,Capnodiales,1,Mycosphaerellaceae,1,Davidiella,0.99,Cladosporium sp CX_2011a,0.53
+22,fASV22,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Cordycipitaceae,0.99,Lecanicillium,0.99,Lecanicillium saksenae,0.59
+23,fASV23,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Hypocreales_Incertae sedis,0.97,Sarocladium,0.91,Sarocladium oryzae,0.87
+24,fASV24,,Fungi,1,Basidiomycota,1,Microbotryomycetes,1,Sporidiobolales,1,Sporidiobolales_Incertae sedis,1,Rhodosporidium,0.69,Rhodosporidium sphaerocarpum,0.67
+25,fASV25,,Fungi,1,Glomeromycota,1,Glomeromycetes,1,Glomerales,1,Glomeraceae,1,Rhizophagus,0.68,Rhizophagus diaphanus,0.46
+26,fASV26,,Fungi,1,Basidiomycota,1,Cystobasidiomycetes,0.9,Cystobasidiales,0.88,Cystobasidiaceae,0.88,Occultifur,0.88,Occultifur externus,0.88
+27,fASV27,,Fungi,1,Chytridiomycota,1,Chytridiomycetes,1,Chytridiales,1,Chytridiaceae,1,Chytriomyces,1,Chytriomyces hyalinus,1
+28,fASV28,,Fungi,1,Ascomycota,1,Eurotiomycetes,1,Eurotiales,1,Trichocomaceae,1,Eupenicillium,0.99,Penicillium melanoconidium,0.28
+29,fASV29,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Hypocreales_Incertae sedis,1,Sarocladium,1,Sarocladium oryzae,0.91
+30,fASV30,,Fungi,1,Ascomycota,1,Eurotiomycetes,1,Eurotiales,1,Trichocomaceae,1,Petromyces,1,Aspergillus flavus,0.91
+31,fASV31,,Fungi,1,Ascomycota,1,Sordariomycetes,0.94,Hypocreales,0.92,Clavicipitaceae,0.2,Pochonia,0.19,Pochonia suchlasporia var catenata,0.19
+32,fASV32,,Fungi,1,Ascomycota,1,Eurotiomycetes,1,Eurotiales,1,Trichocomaceae,1,Neosartorya,1,Neosartorya aureola,0.69
+33,fASV33,,Fungi,1,Glomeromycota,1,Glomeromycetes,1,Glomerales,1,Glomeraceae,1,Rhizophagus,0.87,Rhizophagus diaphanus,0.72
+34,fASV34,,Fungi,1,Ascomycota,1,Sordariomycetes,0.79,Hypocreales,0.48,Hypocreales_Incertae sedis,0.22,Stachybotrys,0.09,Stachybotrys elegans,0.08
+35,fASV35,,Fungi,1,Glomeromycota,1,Glomeromycetes,1,Glomerales,1,Glomeraceae,1,Rhizophagus,0.98,Rhizophagus irregularis DAOM 181602,0.51
+36,fASV36,,Fungi,1,Glomeromycota,1,Glomeromycetes,1,Glomerales,1,Glomeraceae,1,Glomus,0.56,Glomus irregulare,0.56
+37,fASV37,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Sordariales,1,Chaetomiaceae,1,Chaetomium,1,Chaetomium globosum,0.88
+38,fASV38,,Fungi,1,Ascomycota,1,Dothideomycetes,1,Pleosporales,1,Pleosporales_Incertae sedis,0.52,Phoma,0.52,Epicoccum sp JJP_2009a,0.13
+39,fASV39,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Hypocreales_Incertae sedis,0.95,Sarocladium,0.88,Sarocladium oryzae,0.72
+40,fASV40,,Fungi,1,Ascomycota,1,Sordariomycetes,0.96,Hypocreales,0.96,Cordycipitaceae,0.96,Lecanicillium,0.96,Lecanicillium attenuatum,0.53
+41,fASV41,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Hypocreales_Incertae sedis,1,Acremonium,1,Acremonium implicatum,1
+42,fASV42,,Fungi,1,Ascomycota,1,Dothideomycetes,1,Pleosporales,1,Pleosporaceae,1,Alternaria,1,Alternaria longipes,0.42
+43,fASV43,,Fungi,1,Ascomycota,1,Dothideomycetes,1,Capnodiales,1,Mycosphaerellaceae,1,Davidiella,0.99,Cladosporium pseudocladosporioides,0.21
+44,fASV44,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Trichosphaeriales,1,Trichosphaeriales_Incertae sedis,1,Khuskia,1,Khuskia oryzae,0.84
+45,fASV45,,Fungi,1,Zygomycota,1,Mucoromycotina_Incertae sedis,1,Mucorales,1,Mucoraceae,1,Rhizomucor,0.89,Rhizomucor variabilis,0.88
+46,fASV46,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Hypocreales_Incertae sedis,0.99,Sarocladium,0.91,Sarocladium oryzae,0.79
+47,fASV47,,Fungi,1,Basidiomycota,1,Tremellomycetes,1,Tremellales,1,Tremellales_Incertae sedis,0.78,Bullera,0.62,Bullera pseudoalba,0.62
+48,fASV48,,Fungi,1,Ascomycota,1,Dothideomycetes,1,Pleosporales,1,Pleosporales_Incertae sedis,0.62,Phoma,0.62,Epicoccum nigrum,0.48
+49,fASV49,,Fungi,1,Ascomycota,1,Dothideomycetes,1,Capnodiales,1,Mycosphaerellaceae,1,Davidiella,1,Cladosporium colocasiae,0.32
+50,fASV50,,Fungi,1,Basidiomycota,1,Ustilaginomycetes,1,Ustilaginales,1,Ustilaginaceae,1,Pseudozyma,1,Pseudozyma aphidis,0.67
+51,fASV51,,Fungi,1,Basidiomycota,1,Tremellomycetes,1,Tremellales,1,Tremellaceae,1,Cryptococcus,1,Cryptococcus carnescens,0.85
+52,fASV52,,Fungi,1,Basidiomycota,1,Ustilaginomycotina_Incertae sedis,1,Malasseziales,1,Malasseziales_Incertae sedis,1,Malassezia,1,Malassezia restricta,1
+53,fASV53,,Fungi,1,Ascomycota,1,Saccharomycetes,1,Saccharomycetales,1,Saccharomycetales_Incertae sedis,1,Candida,1,Candida sake,1
+54,fASV54,-,Fungi,1,Chytridiomycota,0.13,Chytridiomycetes,0.13,Spizellomycetales,0.04,Spizellomycetaceae,0.04,Powellomyces,0.04,Powellomyces hirtus,0.04
+55,fASV55,,Fungi,1,Ascomycota,1,Dothideomycetes,1,Pleosporales,1,Pleosporaceae,1,Lewia,0.73,Alternaria sp BMP_2012,0.61
+56,fASV56,,Fungi,1,Ascomycota,0.65,Saccharomycetes,0.14,Saccharomycetales,0.14,Saccharomycetaceae,0.06,Saccharomyces,0.04,Saccharomyces uvarum,0
+57,fASV57,,Fungi,1,Ascomycota,1,Dothideomycetes,1,Pleosporales,1,Pleosporaceae,1,Alternaria,0.99,Alternaria longipes,0.44
+58,fASV58,,Fungi,1,Ascomycota,1,Dothideomycetes,1,Pleosporales,1,Pleosporaceae,1,Alternaria,1,Alternaria longipes,0.47
+59,fASV59,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Hypocreales,1,Hypocreales_Incertae sedis,1,Sarocladium,1,Sarocladium oryzae,0.94
+60,fASV60,,Fungi,1,Ascomycota,1,Sordariomycetes,1,Sordariomycetidae_Incertae sedis,1,Glomerellaceae,1,Glomerella,1,Colletotrichum capsici,0.93
+61,fASV61,-,Fungi,1,Basidiomycota,0.46,Agaricomycetes,0.35,Russulales,0.07,Stereaceae,0.06,Stereum,0.06,Stereum rugosum,0.06
+62,fASV62,,Fungi,1,Zygomycota,1,Mucoromycotina_Incertae sedis,1,Mortierellales,1,Mortierellaceae,1,Mortierella,1,Mortierella humilis,1
+63,fASV63,,Fungi,1,Ascomycota,0.32,Eurotiomycetes,0.15,Pyrenulales,0.14,Massariaceae,0.14,Massaria,0.14,Massaria macra,0.14
+64,fASV64,,Fungi,1,Ascomycota,0.39,Eurotiomycetes,0.14,Pyrenulales,0.13,Massariaceae,0.13,Massaria,0.13,Massaria macra,0.12
+65,fASV65,,Fungi,1,Chytridiomycota,0.14,Chytridiomycetes,0.14,Spizellomycetales,0.14,Spizellomycetaceae,0.14,Spizellomyces,0.13,Spizellomyces pseudodichotomus,0.07
+66,fASV66,,Fungi,1,Basidiomycota,1,Tremellomycetes,1,Tremellales,1,Tremellaceae,1,Cryptococcus,1,Cryptococcus carnescens,0.87
