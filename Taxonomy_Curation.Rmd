@@ -1,0 +1,946 @@
+---
+title: "Assign taxonomy & Curate Contaminants/Plant Reads"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+author: "Briana K. Whitaker"
+date: "`r Sys.Date()`"
+---
+\fontsize{9}{10}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=3.5, fig.height=3,
+                      warning=FALSE, message=FALSE)
+```
+---
+
+* Run using `r version[['version.string']] `.
+
+# Objective
+This document reports on the **taxonomic assignment and decontamination** for the Tri5-Mutant-Microbiome project on wheat heads (two replicate rounds: R1/Dec 2023 and R2/May 2024), the North Dakota paired Healthy-Diseased/Barley Endos project on barley heads (with Nate Tyler), and a comparison preparation of samples using HackFlex barcodes instead of the standard Illumina barcodes. Round 1 = R1, Round 2 = R2 for Tri5MB project.
+
+* Assign taxonomy.
+* Examine negative controls. Then remove contaminating ASVs
+* **NOTES** - at some point need to go through and make sure disease data is in ps objs ... but not today.
+* Examine positive controls (prelim)
+
+
+#### Load Packages (hidden)
+```{r, echo=FALSE, results='hide', include=FALSE} 
+
+x<-c("ggplot2", "phyloseq", "Biostrings", "dplyr", "tidyverse", "seqinr",
+     "SCRuB")   # glmnet torch
+lapply(x, require, character.only = TRUE)
+
+#add 'not in' function
+`%nin%` = Negate(`%in%`)
+
+#set seed
+set.seed(183)
+
+# set ggplot2 theme
+theme_set(theme_bw(base_size=16)) 
+theme_update(panel.grid.major=element_line(0), panel.grid.minor=element_line(0))
+```
+
+# Load/Create ps objs 
+### R1
+```{r, results='hide'}
+# load phyloseq object (R1)
+load("./data/R1Bact_ps.RData")
+ps_r1_b <- ps
+load("./data/R1Fung_ps.RData")
+ps_r1_f <- ps
+
+# remove tax table from ps, messes with merging later; also based on another method/older db
+ps_r1_b@tax_table <- NULL
+ps_r1_f@tax_table <- NULL
+```
+
+### R2
+```{r, results='hide', echo = FALSE}
+# # load seqtab from DaDA2 output & make ps obj (R2)
+# load("./data/R2Bact_seqtab.nochim.RData")
+# seqtab.nochim_r2_b <- seqtab.nochim
+# load("./data/R2Fung_seqtab.nochim.RData")
+# seqtab.nochim_r2_f <- seqtab.nochim
+# meta_r2 <- read.csv("./data/R2_Tri5MB_BarleyEndos_HackFlex_MBMetadata.csv",
+#                    stringsAsFactors = TRUE)
+# #table(meta_r2$Kingdom)
+# meta_r2_plate <- read.csv("./data/Tri5MB-R2_BarleyEndos_IlluminaPrep_plateLayout.csv",
+#                    stringsAsFactors = TRUE)
+# #table(meta_r2$Sample_ID %in% meta_r2_plate$sampleName) #all true
+# meta_r2 <- merge(meta_r2, meta_r2_plate, by.x = "Sample_ID", by.y = "sampleName", all = TRUE)
+# meta_r2_b <- meta_r2 %>% filter(Kingdom == 'B')
+#     ## need to add the HF PCR2 blank to the Bact set (also in Fung set, only sample that counts for both)
+# meta_r2_b <- rbind(meta_r2_b, meta_r2[meta_r2$Sample_ID == "PCR 2 Blank-HF",])
+# meta_r2_f <- meta_r2 %>% filter(Kingdom == 'F')
+# #table(meta_r2_b$sequenceCode %in% rownames(seqtab.nochim_r2_b))
+# #table(meta_r2_f$sequenceCode %in% rownames(seqtab.nochim_r2_f))
+# rownames(meta_r2_b) <- meta_r2_b$sequenceCode
+# rownames(meta_r2_f) <- meta_r2_f$sequenceCode
+# # make phyloseq object
+# ps_r2_b <- phyloseq(otu_table(seqtab.nochim_r2_b, taxa_are_rows=FALSE),
+#                     sample_data(meta_r2_b))
+# ps_r2_f <- phyloseq(otu_table(seqtab.nochim_r2_f, taxa_are_rows=FALSE),
+#                     sample_data(meta_r2_f))
+# 
+# # add refseq & save ps obj
+# dna_r2_b <- Biostrings::DNAStringSet(taxa_names(ps_r2_b))
+# names(dna_r2_b) <- taxa_names(ps_r2_b)
+# ps_r2_b <- merge_phyloseq(ps_r2_b, dna_r2_b)
+# taxa_names(ps_r2_b) <- paste0("bASV", seq(ntaxa(ps_r2_b)))
+# writeXStringSet(refseq(ps_r2_b),
+#                 filepath = "./data/R2Bact_uniqueSeqs.fasta")
+# save(ps_r2_b, file="./data/R2Bact_ps.RData")
+# # add refseq & save ps obj
+# dna_r2_f <- Biostrings::DNAStringSet(taxa_names(ps_r2_f))
+# names(dna_r2_f) <- taxa_names(ps_r2_f)
+# ps_r2_f <- merge_phyloseq(ps_r2_f, dna_r2_f)
+# taxa_names(ps_r2_f) <- paste0("fASV", seq(ntaxa(ps_r2_f)))
+# writeXStringSet(refseq(ps_r2_f),
+#                 filepath = "./data/R2Fung_uniqueSeqs.fasta")
+# save(ps_r2_f, file="./data/R2Fung_ps.RData")
+
+uniqueSS_r2_b <- readDNAStringSet("./data/R2Bact_uniqueSeqs.fasta")
+uniqueSS_r2_f <- readDNAStringSet("./data/R2Fung_uniqueSeqs.fasta")
+```
+
+```{r, results='hide'}
+load("./data/R2Bact_ps.RData")
+ps_r2_b
+load("./data/R2Fung_ps.RData")
+ps_r2_f
+
+# save out metadata, to add back after unmerge
+SbyE_r2_b <- (as(sample_data(ps_r2_b), "data.frame"))
+SbyE_r2_f <- (as(sample_data(ps_r2_f), "data.frame"))
+```
+
+### Merge respective Bact and Fung datasets (hidden)
+
+```{r, results='hide', echo = FALSE}
+## check for unique sample names, want all FALSE
+# table(sample_names(ps_r1_b) %in% sample_names(ps_r2_b))
+# table(sample_names(ps_r2_b) %in% sample_names(ps_r1_b))
+# table(sample_names(ps_r1_f) %in% sample_names(ps_r2_f))
+# table(sample_names(ps_r2_f) %in% sample_names(ps_r1_f))
+
+#colnames(sample_data(ps_r1_b)) #same b and f
+#colnames(sample_data(ps_r2_b))
+
+colKeep <- c("Sample_ID", "I7_Index_ID", "I5_Index_ID", "Kingdom", "Chamber.Rep", "Strain", "Rep")
+  #"project", "controlName", "field", "headPair", "diseaseStatus",
+  #"sequenceCode",  "I7_Index_Seq", "I5_Index_Seq")
+
+# drop non-overlapping columns (... for now)
+ps_r1_b@sam_data <- ps_r1_b@sam_data[,colKeep]
+ps_r2_b@sam_data <- ps_r2_b@sam_data[,colKeep]
+ps_r1_f@sam_data <- ps_r1_f@sam_data[,colKeep]
+ps_r2_f@sam_data <- ps_r2_f@sam_data[,colKeep]
+
+
+# make sequences the names of the ps objects
+dna_r1_b <- data.frame(name = names(ps_r1_b@refseq), seq = unname(as.character(ps_r1_b@refseq)))
+taxa_names(ps_r1_b) <- dna_r1_b$seq[ match(taxa_names(ps_r1_b), dna_r1_b$name) ]
+dna_r2_b <- data.frame(name = names(ps_r2_b@refseq), seq = unname(as.character(ps_r2_b@refseq)))
+taxa_names(ps_r2_b) <- dna_r2_b$seq[ match(taxa_names(ps_r2_b), dna_r2_b$name) ]
+dna_r1_f <- data.frame(name = names(ps_r1_f@refseq), seq = unname(as.character(ps_r1_f@refseq)))
+taxa_names(ps_r1_f) <- dna_r1_f$seq[ match(taxa_names(ps_r1_f), dna_r1_f$name) ]
+dna_r2_f <- data.frame(name = names(ps_r2_f@refseq), seq = unname(as.character(ps_r2_f@refseq)))
+taxa_names(ps_r2_f) <- dna_r2_f$seq[ match(taxa_names(ps_r2_f), dna_r2_f$name) ]
+
+# # code sanity checks
+# merge_phyloseq_pair(ps_r1_b@otu_table, ps_r2_b@otu_table) -> out
+# merge_phyloseq_pair(ps_r1_b@sam_data, ps_r2_b@sam_data) -> out2
+# identical(sort(as.numeric(ps_r1_b@otu_table["B-BactMock",]), decreasing = TRUE)[1:100],
+#           sort(as.numeric(out["B-BactMock",]), decreasing = TRUE)[1:100]  )
+# merge_phyloseq_pair(ps_r1_f@otu_table, ps_r2_f@otu_table) -> out
+# merge_phyloseq_pair(ps_r1_f@sam_data, ps_r2_f@sam_data) -> out2
+# identical(sort(as.numeric(ps_r1_f@otu_table["F-FunMock",]), decreasing = TRUE)[1:60],
+#           sort(as.numeric(out["F-FunMock",]), decreasing = TRUE)[1:60]  )
+
+#merge b groups, and f groups, separately
+ps_b0 <- merge_phyloseq(ps_r1_b, ps_r2_b) #428 + 16171 = 16599, but 16372 comes back (so 227 shared) 
+ps_f0 <- merge_phyloseq(ps_r1_f, ps_r2_f) #66 + 4007 = 4073, but 4029 comes back (so 44 shared) 
+
+## bacteria
+#reorder taxa by abundance
+abunOrder <- names(sort(colSums(ps_b0@otu_table), decreasing = TRUE))
+abundances <- unname(sort(colSums(ps_b0@otu_table), decreasing = TRUE))
+ps_b0@otu_table <- ps_b0@otu_table[, abunOrder]
+ps_b0@tax_table <- ps_b0@tax_table[abunOrder, ]
+ps_b0@refseq <- ps_b0@refseq[names(ps_b0@refseq)[match(abunOrder, names(ps_b0@refseq))] ]
+#rename taxa
+ps_b <- ps_b0
+taxa_names(ps_b) <- paste0("bASV", seq(1,length(taxa_names(ps_b))))
+#identical(unname(colSums(ps_b@otu_table)), abundances) #sanity check
+ps_b
+
+## fungi
+#reorder taxa by abundance
+abunOrder2 <- names(sort(colSums(ps_f0@otu_table), decreasing = TRUE))
+abundances2 <- unname(sort(colSums(ps_f0@otu_table), decreasing = TRUE))
+ps_f0@otu_table <- ps_f0@otu_table[, abunOrder2]
+ps_f0@tax_table <- ps_f0@tax_table[abunOrder2, ]
+ps_f0@refseq <- ps_f0@refseq[names(ps_f0@refseq)[match(abunOrder2, names(ps_f0@refseq))] ]
+#rename taxa
+ps_f <- ps_f0
+taxa_names(ps_f) <- paste0("fASV", seq(1,length(taxa_names(ps_f))))
+#identical(unname(colSums(ps_f@otu_table)), abundances2) #sanity check
+ps_f
+
+ # writeXStringSet(refseq(ps_b),
+ #                  filepath = "./data/R1R2Bact_combineSeqs.fasta")
+ # writeXStringSet(refseq(ps_f),
+ #                  filepath = "./data/R1R2Fung_combineSeqs.fasta")
+
+# # convert using seqinR for qiime format
+# ref_b <- read.fasta("./data/R1R2Bact_combineSeqs.fasta")
+# write.fasta(ref_b, names(ref_b), nbchar = 1000, file.out = "./data/R1R2Bact_combineSeqs.fna")
+# ref_f <- read.fasta("./data/R1R2Fung_combineSeqs.fasta")
+# write.fasta(ref_f, names(ref_f), nbchar = 1000, file.out = "./data/R1R2Fung_combineSeqs.fna")
+
+```
+
+* Note - re-ran R2-Bacterial DADA2 to include HFPCR2Blk Aug 2025 - but no changes to number of ASVs or their abundance order overall (Git not recognizing changes), so their is no need to rerun the QIIME2
+
+
+```{r, fig.height= 8, echo = FALSE}
+par(mfrow = c(2,1))
+hist(log10(colSums(ps_b@otu_table)), main = "Log10 ASV depth Bact")
+hist(log10(rowSums(ps_b@otu_table)), main = "Log10 Sample depth Bact") 
+hist(log10(colSums(ps_f@otu_table)), main = "Log10 ASV depth Fung")
+hist(log10(rowSums(ps_f@otu_table)), main = "Log10 Sample depth Fung") 
+par(mfrow = c(1,1))
+```
+
+* Bact (all): 221 samples, 16372 ASVs
+* Fung (all): 400 samples, 4029 ASVs
+
+
+# Taxonomic Classification 
+
+### FUNGI
+* Qiime2 implementation of a Naive Bayesian Classifier using 
+    * the UNITE, 2025.02 release, Euks, RefS, dynamic as the database (command line)
+    * the SILVA, v.138.1, 99% species database
+* Code for training Fungi database in ./code/qiime_featureclassifier_commandLine.txt
+```{r, include = FALSE}
+# qiime.unite <- read.delim("./data/R1R2Fung_combineSeqs_qiimeUNITE.tsv", sep = "\t")
+# hier <- c("domain", 'phylum', 'class', 'order',
+#           'family', 'genus', 'species', 'SH')
+# qiime.unite %>% separate(Taxon, into = hier, sep = ";") %>%
+#     merge(qiime.unite) %>%
+#     select(-Taxon) -> qiime.unite
+# qiime.unite$domain  <- gsub(qiime.unite$domain , pattern = "k__", replacement = "")
+# qiime.unite$phylum  <- gsub(qiime.unite$phylum , pattern = "p__", replacement = "")
+# qiime.unite$class   <- gsub(qiime.unite$class  , pattern = "c__", replacement = "")
+# qiime.unite$order   <- gsub(qiime.unite$order  , pattern = "o__", replacement = "")
+# qiime.unite$family  <- gsub(qiime.unite$family , pattern = "f__", replacement = "")
+# qiime.unite$genus   <- gsub(qiime.unite$genus  , pattern = "g__", replacement = "")
+# qiime.unite$species <- gsub(qiime.unite$species, pattern = "s__", replacement = "")
+# qiime.unite$SH      <- gsub(qiime.unite$SH     , pattern = "sh__", replacement = "")
+# write.csv(qiime.unite, "./data/R1R2Fung_combineSeqs_qiimeUNITE.csv")
+
+```
+
+* Note - manually edited sheet, for fungi with incertae sedis classification via UNITE that did not lead to a genus name, changed to NA after last confident assignment
+```{r, results = 'hide'}
+qiime.unite <- read.csv("./data/R1R2Fung_combineSeqs_qiimeUNITE-edit.csv",
+                        stringsAsFactors = TRUE, row.names=1)
+
+dim(qiime.unite %>% filter(grepl('Unassigned', domain)))[1]
+dim(qiime.unite %>% filter(grepl('Viridiplantae', domain)))[1]
+dim(qiime.unite %>% filter(grepl('Stramenopila', domain)))[1]
+
+```
+* Domain: Unassigned: 790
+* Domain: Viridiplantae: 139
+* Oomycete: 1
+
+
+```{r, results = 'hide'}
+#save PS again with tax table
+rownames(qiime.unite) <- qiime.unite$Feature.ID
+qiime.unite %>% select(-Feature.ID, -Confidence, -SH) -> qiime.unite
+ps_f_assn0a <- ps_f
+ps_f_assn0a@tax_table <- tax_table(as.matrix(qiime.unite))
+ps_f_assn0a
+
+# Remove Plant & Unassigned at Domain level
+ps_f_assn0b <- subset_taxa(ps_f_assn0a, domain != 'Unassigned')
+sum(rowSums(ps_f_assn0b@otu_table))/sum(rowSums(ps_f_assn0a@otu_table))*100  
+ps_f_assn <- subset_taxa(ps_f_assn0b, domain != 'Viridiplantae')
+sum(rowSums(ps_f_assn@otu_table))/sum(rowSums(ps_f_assn0b@otu_table))*100    
+
+## save out file
+#save(ps_f_assn, file="./data/R1R2Fung_ps_f_assn.RData")
+load("./data/R1R2Fung_ps_f_assn.RData")
+ps_f_assn
+```
+
+* leaves 3100 fungal ASVs
+* 0.05% of reads were Unassigned at the domain level
+* 0.21% of reads were plant
+
+
+### BACTERIA
+* Qiime2 implementation of a Naive Bayesian Classifier using 
+    * the SILVA, v.138.1, 99% species database
+* Used pre-trained classifier downloaded from QIIME2
+```{r, include = FALSE}
+# qiime.silva <- read.delim("./data/R1R2Bact_combineSeqs_qiimeSilva.tsv", sep = "\t")
+# hier <- c("domain", 'phylum', 'class', 'order',
+#           'family', 'genus')
+# qiime.silva %>% separate(Taxon, into = hier, sep = ";") %>%
+#     merge(qiime.silva) %>%
+#     select(-Taxon) -> qiime.silva
+# qiime.silva$domain  <- gsub(qiime.silva$domain , pattern = "d__", replacement = "")
+# qiime.silva$phylum  <- gsub(qiime.silva$phylum , pattern = "p__", replacement = "")
+# qiime.silva$class   <- gsub(qiime.silva$class  , pattern = "c__", replacement = "")
+# qiime.silva$order   <- gsub(qiime.silva$order  , pattern = "o__", replacement = "")
+# qiime.silva$family  <- gsub(qiime.silva$family , pattern = "f__", replacement = "")
+# qiime.silva$genus   <- gsub(qiime.silva$genus  , pattern = "g__", replacement = "")
+# write.csv(qiime.silva, "./data/R1R2Bact_combineSeqs_qiimeSilva.csv")
+
+```
+
+* Going to do this a little differently for Bacteria. A lot of taxa unassigned at Domain level (including all low confidence). Will remove, then examine other contamination forms.
+
+```{r, results = 'hide'}
+qiime.silva <- read.csv("./data/R1R2Bact_combineSeqs_qiimeSilva-edit.csv",
+                        stringsAsFactors = TRUE, row.names=1)
+
+dim(qiime.silva %>% filter(grepl('Unassigned', domain)))[1]
+
+
+#save PS again with tax table
+rownames(qiime.silva) <- qiime.silva$Feature.ID
+qiime.silva %>% select(-Feature.ID, -Confidence) -> qiime.silva
+ps_b_assn0a <- ps_b
+ps_b_assn0a@tax_table <- tax_table(as.matrix(qiime.silva))
+ps_b_assn0a
+# Remove Unassigned at Domain level
+ps_b_assn0b <- subset_taxa(ps_b_assn0a, domain != 'Unassigned')
+sum(rowSums(ps_b_assn0b@otu_table))/sum(rowSums(ps_b_assn0a@otu_table))*100  
+```
+
+* Domain: Unassigned: 10,898 ASVs
+* surprisingly, this is only 0.16% of the read count though.
+* also manually removed all the NAs that were written in
+
+```{r, results = 'hide'}
+#write.csv(tax_table(ps_b_assn0b), "./data/R1R2Bact_combineSeqs_qiimeSilva-edit2.csv")
+qiime.silva <- read.csv("./data/R1R2Bact_combineSeqs_qiimeSilva-edit2.csv",
+                        stringsAsFactors = TRUE, row.names=1)
+
+dim(qiime.silva %>% filter(grepl('Mitochondria', genus)))[1]
+dim(qiime.silva %>% filter(grepl('Chloroplast', genus)))[1]
+dim(qiime.silva %>% filter(grepl('Eukaryota', domain)))[1]
+dim(qiime.silva %>% filter(grepl('remove-AphidSymbiont', remove)))[1]
+
+
+#save PS again with tax table
+rownames(qiime.silva) <- qiime.silva$X.1
+qiime.silva %>% select(-X.1, -remove, -notes) -> qiime.silva
+ps_b_assn0c <- ps_b_assn0b
+ps_b_assn0c@tax_table <- tax_table(as.matrix(qiime.silva))
+ps_b_assn0c
+# Remove problematic taxa
+ps_b_assn0d <- subset_taxa(ps_b_assn0c, genus != 'Mitochondria' & genus != "Chloroplast")
+#sum(rowSums(ps_b_assn0d@otu_table))/sum(rowSums(ps_b_assn0c@otu_table))*100  
+ps_b_assn0e <- subset_taxa(ps_b_assn0d, domain != "Eukaryota")
+ps_b_assn <- subset_taxa(ps_b_assn0e, genus != "Buchnera" & 
+        genus != "Wolbachia" & genus != "Rickettsia" & genus != "Spiroplasma")
+## save out file
+#save(ps_b_assn, file="./data/R1R2Bact_ps_b_assn.RData")
+load("./data/R1R2Bact_ps_b_assn.RData")
+ps_b_assn
+```
+
+* Genus: Mitochondria: 1,368 ASVs, 30.27% of the remaining data
+* Genus: Chloroplast:    623 ASVs, 39.3% of the remaining data
+* Domain: Eukaryota:   1,484 ASVs,  0.03% of the remaining data
+* Likely Aphid Symbionts: 38 ASVs (obligate = Buchnera; facultative=Wolbachia, Ricksettia, Spiroplasma)
+* 918 ASVs NA at phylum level, but Bact or Archaea at domain level. Leaving in, for now - no reason to remove them.
+
+#### CONTAMINATION SUMMARY
+* Lost a lot of reads (and potentially reduced diversity obtainment) due to Mitochondria + Chloroplasts in bacteria data set. 
+* 1961 ASVs remaining in bacteria, 3100 ASVs in Fungi
+
+
+# Unmerge respective Bact and Fung datasets (hidden)
+
+```{r, include = FALSE}
+# table(sample_names(ps_b_assn) %in% sample_names(ps_r1_b))
+# table(sample_names(ps_b_assn) %in% sample_names(ps_r2_b))
+# 
+# table(sample_names(ps_f_assn) %in% sample_names(ps_r1_f))
+# table(sample_names(ps_f_assn) %in% sample_names(ps_r2_f))
+
+ps_r1_b_assn <- subset_samples(ps_b_assn, sample_names(ps_b_assn) %in% sample_names(ps_r1_b))
+ps_r1_b_assn <- filter_taxa(ps_r1_b_assn, function(x) mean(x) > 0, TRUE )
+ps_r1_b_assn
+ps_r2_b_assn <- subset_samples(ps_b_assn, sample_names(ps_b_assn) %in% sample_names(ps_r2_b))
+ps_r2_b_assn <- filter_taxa(ps_r2_b_assn, function(x) mean(x) > 0, TRUE )
+ps_r2_b_assn
+
+ps_r1_f_assn <- subset_samples(ps_f_assn, sample_names(ps_f_assn) %in% sample_names(ps_r1_f))
+ps_r1_f_assn <- filter_taxa(ps_r1_f_assn, function(x) mean(x) > 0, TRUE )
+ps_r1_f_assn
+ps_r2_f_assn <- subset_samples(ps_f_assn, sample_names(ps_f_assn) %in% sample_names(ps_r2_f))
+ps_r2_f_assn <- filter_taxa(ps_r2_f_assn, function(x) mean(x) > 0, TRUE )
+ps_r2_f_assn
+
+```
+
+* Bact: r1 dropped from 428 to 141 ASVs, r2 dropped from 16171 to 1885 ASVs
+* Fung: r1 dropped from 66 to 60 ASVs, r2 dropped from 4007 to 3084 ASVs
+
+
+
+```{r, include = FALSE}
+### Add Back orig metadata
+
+### R1
+head(sample_data(ps_r1_b_assn)) # this is the orig metadata
+head(sample_data(ps_r1_f_assn))
+
+### R2
+# # sanity check
+# table(rownames(SbyE_r2_b) %in% sample_names(ps_r2_b_assn)) #must be all TRUE
+# table(rownames(SbyE_r2_f) %in% sample_names(ps_r2_f_assn))
+# # re-assign metadata
+sample_data(ps_r2_b_assn) <- SbyE_r2_b
+sample_data(ps_r2_f_assn) <- SbyE_r2_f
+
+```
+
+
+# Controls
+
+### Overview
+```{r}
+# define control samples
+cont_name <- c("B-BactMock", "B-PCR1Blk", "B-PCR2Blk",
+               "BactMock", "BactPCR1Blk", "BactPCR2Blk",   "BactMockHF", "B-HFPCR1Blk", 
+                    #"HFPCR2Blk (this sample appears in both B & F R2 datasets)
+               "F-FunMock", #two PCR blanks dropped out during DADA2
+               "FunMock", "FunPCR1Blk", "FunPCR2Blk",       "FunMockHF", "HFPCR2Blk")
+
+## examine controls
+cont_r1_b <- subset_samples(ps_r1_b_assn, sample_names(ps_r1_b_assn) %in% cont_name)
+cont_r1_b <- filter_taxa(cont_r1_b, function(x) mean(x) > 0, TRUE )
+rowSums(cont_r1_b@otu_table)
+#colSums(cont_r1_b@otu_table) #bASV34 + 325 are in mock, but ASV3 1 read in PCR2 blank
+
+cont_r1_f <- subset_samples(ps_r1_f_assn, sample_names(ps_r1_f_assn) %in% cont_name)
+cont_r1_f <- filter_taxa(cont_r1_f, function(x) mean(x) > 0, TRUE )
+rowSums(cont_r1_f@otu_table)
+#colSums(cont_r1_f@otu_table) #24 fungal ASVs in mock
+
+
+cont_r2_b <- subset_samples(ps_r2_b_assn, sample_names(ps_r2_b_assn) %in% cont_name)
+cont_r2_b <- filter_taxa(cont_r2_b, function(x) mean(x) > 0, TRUE )
+rowSums(cont_r2_b@otu_table) # mocks both have > 100,000 reads, Blanks have 21-276 reads. 
+    # HFPCRBlk only contam was Chloroplast/Mitochondria which were removed above
+     # Unfortunately, some real samples on par with blanks (~271 to 644906 reads)
+#colSums(cont_r2_b@otu_table) 
+# cont_r2_b@otu_table['BactMock',]   # 22 bacterial ASVs in mock
+# cont_r2_b@otu_table['BactMockHF',] # 32 bacterial ASVs in mock
+# cont_r2_b@otu_table['BactPCR1Blk',] #bASV3 bASV4 bASV173 bASV183 bASV198 bASV233 bASV3127
+# cont_r2_b@otu_table['BactPCR2Blk',] #bASV3
+# cont_r2_b@otu_table['B-HFPCR1Blk',] #bASV3 bASV4 bASV173 bASV183 bASV198 bASV233 bASV3127 bASV4626
+
+cont_r2_f <- subset_samples(ps_r2_f_assn, sample_names(ps_r2_f_assn) %in% cont_name)
+cont_r2_f <- filter_taxa(cont_r2_f, function(x) mean(x) > 0, TRUE )
+rowSums(cont_r2_f@otu_table) # mocks have 100K to 1mil reads, Blanks have 22-336 reads. 
+    # Unfortunately, some real samples on par with  blanks (#44 to 3,429,538 reads)
+# cont_r2_f@otu_table['FunMock',]   # 34 fungal ASVs in mock
+# cont_r2_f@otu_table['FunMockHF',] # 52 fungal ASVs in mock
+# cont_r2_f@otu_table['FunPCR1Blk',] #fASV1 fASV2       fASV5 fASV7     fASV8 fASV17 fASV20
+# cont_r2_f@otu_table['FunPCR2Blk',] #fASV1 fASV2 fASV3       fASV7      fASV10 fASV59
+# cont_r2_f@otu_table['HFPCR2Blk',]  #            fASV3                 fASV9 
+```
+
+#### NEGATIVES SUMMARY
+* R1 bact had only 1 read in PCR2 blank and 0 in PCR1 blank. So easiest is just to drop low abundance ASVs (1 read or less)
+* R1 Fung had no contamination
+* R2 bact and fung both had PCR blanks with contamination on par to real samples, so will require SCRuB or similar decontamination approach.
+* Can compare Mocks in R2 bact and R1/R2 fung to real composition to get a sense for read clustering.
+
+
+### R1 Negatives Bacteria & Fungi
+* Bacteria - no ASVs with 1 read count (contam level in PCR2), so instead will subtract 1 read from everything, to account for the 1 read contam in PCR2 blank
+* Fungi - don't need to do anything
+```{r}
+## Bacteria
+#table(colSums(ps_r1_b_assn@otu_table)) 
+ps_r1_b_curated <- ps_r1_b_assn     # rename for consistent naming
+
+otu_matrix <- ps_r1_b_curated@otu_table@.Data
+otu_matrix_sub <- ifelse(otu_matrix > 0, otu_matrix - 1, otu_matrix)
+otu_table(ps_r1_b_curated) <- otu_table(otu_matrix_sub, taxa_are_rows = FALSE) 
+# remove PCR blanks from dataset
+#table(rowSums(ps_r1_b_curated@otu_table) >0 )
+ps_r1_b_curated <- subset_samples(ps_r1_b_curated, 
+    sample_names(ps_r1_b_curated) %nin% c("B-PCR1Blk", "B-PCR2Blk") )
+
+# ps_r1_b_curated #73 samples remaining
+ps_r1_f_curated <- ps_r1_f_assn    # rename for consistent naming
+```
+
+### R2 Negatives Bacteria
+#### format
+* notes for bacteria: can do plate-based/spatially-explicit SCRuB, but not for fungi
+```{r, include = FALSE}
+# split up the projects
+tri5mb_b <- subset_samples(ps_r2_b_assn, project == "Tri5MB" | project == "control")
+hf_b <- subset_samples(ps_r2_b_assn, project == "HackFlex" | project == "HackFlex-control")
+# create meta/mat for scrub
+meta_tri5 <- (as(sample_data(tri5mb_b), "data.frame"))
+mat_tri5 <- (as(otu_table(tri5mb_b), "matrix"))
+meta_hf <- (as(sample_data(hf_b), "data.frame"))
+mat_hf <- (as(otu_table(hf_b), "matrix"))
+
+# format for SCRuB
+meta_tri5 <- meta_tri5 %>% arrange(sequenceCode) %>%
+    mutate(sample_type = 
+        if_else(controlName == "BactPCR1Blk", "BlankPCR1", 
+                if_else(controlName == "BactPCR2Blk", "BlankPCR2", "other"))) %>%
+    mutate(is_control = if_else(sample_type == "BlankPCR1" | sample_type == "BlankPCR2", 
+            "TRUE", "FALSE")) %>%
+    mutate(sample_well = well) %>%
+    #mutate(sample_plate = plate) %>%
+    select(is_control, sample_type, sample_well) #%>%      
+meta_tri5$sample_well <- as.character(meta_tri5$sample_well)
+meta_hf <- meta_hf %>% arrange(sequenceCode) %>%
+    mutate(sample_type = 
+        if_else(controlName == "B-HFPCR1Blk", "BlankPCR1", "other")) %>%   # HFPCR2Blk = 0 reads
+    mutate(is_control = if_else(sample_type == "BlankPCR1", #| sample_type == "BlankPCR2", 
+            "TRUE", "FALSE")) %>%
+    mutate(sample_well = well) %>%
+    #mutate(sample_plate = plate) %>%
+    select(is_control, sample_type, sample_well) #%>%      
+meta_hf$sample_well <- as.character(meta_hf$sample_well)
+
+# remove HFPCR2Blk with 0 reads
+meta_hf <- meta_hf[rownames(meta_hf) != "HFPCR2Blk",] 
+mat_hf <- mat_hf[rownames(mat_hf) != "HFPCR2Blk",] 
+
+# rearrange rows to match 
+mat_tri5 %>% data.frame %>% mutate(ids = rownames(mat_tri5)) %>%
+    arrange(ids) %>% select(-ids) %>% as.matrix -> mat_tri5
+#identical(rownames(mat_tri5), rownames(meta_tri5)) #TRUE
+mat_hf %>% data.frame %>% mutate(ids = rownames(mat_hf)) %>%
+    arrange(ids) %>% select(-ids) %>% as.matrix -> mat_hf
+#identical(rownames(mat_hf), rownames(meta_hf)) #TRUE
+```
+
+#### SCRuB
+```{r}
+# # run SCRuB by plate with spatial info
+control_order <- c("BlankPCR1", "BlankPCR2") 
+control_order_hfb <- c("BlankPCR1")  
+# scr_tri5 <- SCRuB(mat_tri5, meta_tri5, control_order = control_order ) 
+# ### "Controls' LSQ init removed everything from a control -- will instead set initialization to the observed control"
+# save(scr_tri5, file="./intermediate/Tri5MB_R2Bact_scrubOut.RData")
+# scr_hf <- SCRuB(mat_hf, meta_hf, control_order = control_order_hfb )
+# save(scr_hf, file="./intermediate/HF_Bact_scrubOut.RData")
+
+load("./intermediate/Tri5MB_R2Bact_scrubOut.RData")
+load("./intermediate/HF_Bact_scrubOut.RData")
+```
+
+#### Examine
+```{r, fig.keep='none'}
+# Estimated contamination level #read boxplot as contam proportion
+(1 - scr_tri5$p) %>% boxplot()              
+median(100-(scr_tri5$p*100))  #0.12%  (in percentages)
+(1 - scr_hf$p) %>% boxplot()              
+median(100-(scr_hf$p*100))  #0.09%  (in percentages)
+```
+```{r}
+# Estimated realtive abundance of the contamination community
+#  index = 1 to ~X ASVs in this dataset
+scr_tri5$inner_iterations$`BlankPCR1`$gamma %>% plot() # several with contam
+scr_tri5$inner_iterations$`BlankPCR2`$gamma %>% plot() # only 1-2 ASVs w/higher contam
+scr_hf$inner_iterations$`BlankPCR1`$gamma %>% plot() # several with contam
+
+# Estimate well-to-well leakage from controls
+scr_tri5$inner_iterations$`BlankPCR1`$alpha[, ncol(scr_tri5$inner_iterations$`BlankPCR1`$alpha)]
+# 0.90% well-to-well leakage 
+scr_tri5$inner_iterations$`BlankPCR2`$alpha[, ncol(scr_tri5$inner_iterations$`BlankPCR2`$alpha)]
+# 0% well-to-well leakage 
+scr_hf$inner_iterations$`BlankPCR1`$alpha[, ncol(scr_hf$inner_iterations$`BlankPCR1`$alpha)]
+# 0.886% well-to-well leakage 
+
+```
+
+```{r, include=FALSE}
+# # save out scrub-ed matrix
+# decon_tri5 <- scr_tri5$decontaminated_samples
+# write.csv(decon_tri5, "./data/R2Bact_SbyS_scrub.csv")
+# decon_hf <- scr_hf$decontaminated_samples
+# write.csv(decon_hf, "./data/HF_Bact_SbyS_scrub.csv")
+decon_tri5 <- read.csv("./data/R2Bact_SbyS_scrub.csv", row.names = 1) %>% as.matrix()
+decon_hf <- read.csv("./data/HF_Bact_SbyS_scrub.csv", row.names = 1) %>% as.matrix()
+
+# # example matrix comparison
+# mat_tri5[1:10,1:10]
+# decon_tri5[1:10,1:10]
+# mat_hf[1:10,1:10]
+# decon_hf[1:10,1:10]
+
+# save new ps objects
+ps_r2_b_curated0 <- subset_samples(ps_r2_b_assn, 
+                        sample_names(ps_r2_b_assn) %in% rownames(decon_tri5))
+ps_r2_b_curated <- ps_r2_b_curated0
+mat_tri5_final <- otu_table(decon_tri5, taxa_are_rows = FALSE)
+otu_table(ps_r2_b_curated) <- mat_tri5_final
+# ps_r2_b_curated0@otu_table["GB-P04-A02",1:10] #prior SCRuB
+# ps_r2_b_curated@otu_table["GB-P04-A02",1:10]   #post SCRuB
+ps_r2_b_curated <- filter_taxa(ps_r2_b_curated, function(x) sum(x) > 0, TRUE)
+
+
+ps_hf_b_curated0 <- subset_samples(ps_r2_b_assn, 
+                        sample_names(ps_r2_b_assn) %in% rownames(decon_hf))
+ps_hf_b_curated <- ps_hf_b_curated0
+mat_hf_final <- otu_table(decon_hf, taxa_are_rows = FALSE)
+otu_table(ps_hf_b_curated) <- mat_hf_final
+# ps_hf_b_curated0@otu_table["GB-P05-A09",1:10] #prior SCRuB
+# ps_hf_b_curated@otu_table["GB-P05-A09",1:10]   #post SCRuB
+ps_hf_b_curated <- filter_taxa(ps_hf_b_curated, function(x) sum(x) > 0, TRUE)
+
+```
+
+* For Tri5MB R2 - filter leaves 655 out of 1885
+* For HF - filter leaves 731 out of 1885 
+*so A LOT were removed, HF/R2 should be mostly same taxa, so this is surprising given the low contamination, hmmmm.....
+
+
+### R2 Negatives Fungi
+#### format
+* running a-spatial for fungi
+```{r, include = FALSE}
+# split up the projects
+mb_f <- subset_samples(ps_r2_f_assn, project == "Tri5MB" | project == "BarleyEndos" | project == "control")
+hf_f <- subset_samples(ps_r2_f_assn, project == "HackFlex" | project == "HackFlex-control")
+# create meta/mat for scrub
+meta_f <- (as(sample_data(mb_f), "data.frame"))
+mat_f <- (as(otu_table(mb_f), "matrix"))
+meta_hff <- (as(sample_data(hf_f), "data.frame"))
+mat_hff <- (as(otu_table(hf_f), "matrix"))
+
+
+# format for SCRuB
+## notes for bacteria, can do plate-based/spatially-explicit SCRuB, but not for fungi
+meta_f <- meta_f %>% arrange(sequenceCode) %>%
+    mutate(sample_type = 
+        if_else(controlName == "FunPCR1Blk", "BlankPCR1", 
+                if_else(controlName == "FunPCR2Blk", "BlankPCR2", "other"))) %>%
+    mutate(is_control = if_else(sample_type == "BlankPCR1" | sample_type == "BlankPCR2", 
+            "TRUE", "FALSE")) %>%
+    #mutate(sample_well = well) %>%
+    #mutate(sample_plate = plate) %>%
+    select(is_control, sample_type) #%>%      
+#meta_f$sample_well <- as.character(meta_f$sample_well)
+
+meta_hff <- meta_hff %>% arrange(sequenceCode) %>%
+    mutate(sample_type = 
+        if_else(controlName == "HFPCR2Blk", "BlankPCR2", "other")) %>%  
+    mutate(is_control = if_else(sample_type == "BlankPCR2", 
+            "TRUE", "FALSE")) %>%
+    #mutate(sample_well = well) %>%
+    #mutate(sample_plate = plate) %>%
+    select(is_control, sample_type) #%>%      
+#meta_hff$sample_well <- as.character(meta_hff$sample_well)
+
+
+# rearrange rows to match 
+mat_f %>% data.frame %>% mutate(ids = rownames(mat_f)) %>%
+    arrange(ids) %>% select(-ids) %>% as.matrix -> mat_f
+#identical(rownames(mat_f), rownames(meta_f)) #TRUE
+mat_hff %>% data.frame %>% mutate(ids = rownames(mat_hff)) %>%
+    arrange(ids) %>% select(-ids) %>% as.matrix -> mat_hff
+#identical(rownames(mat_hff), rownames(meta_hff)) #TRUE
+```
+
+#### SCRuB
+```{r}
+# # run SCRuB by plate with spatial info
+control_order <- c("BlankPCR1", "BlankPCR2") 
+control_order_hf <- c("BlankPCR2")   
+# scr_f <- SCRuB(mat_f, meta_f, control_order = control_order )
+# save(scr_f, file="./intermediate/Tri5MBBarleyEndos_R2Fung_scrubOut.RData")
+# scr_hff <- SCRuB(mat_hff, meta_hff, control_order = control_order_hf )
+# save(scr_hff, file="./intermediate/HF_Fung_scrubOut.RData")
+
+load("./intermediate/Tri5MBBarleyEndos_R2Fung_scrubOut.RData")
+load("./intermediate/HF_Fung_scrubOut.RData")
+```
+
+#### Examine
+```{r, fig.keep='none'}
+# Estimated contamination level #read boxplot as contam proportion
+(1 - scr_f$p) %>% boxplot()              
+median(100-(scr_f$p*100))  #0.68%  (in percentages)
+(1 - scr_hff$p) %>% boxplot()              
+median(100-(scr_hff$p*100))  #0.07%  (in percentages)
+```
+```{r}
+# Estimated realtive abundance of the contamination community
+#  index = 1 to ~X ASVs in this dataset
+scr_f$inner_iterations$`BlankPCR1`$gamma %>% plot() # only 1 major contam
+scr_f$inner_iterations$`BlankPCR2`$gamma %>% plot() # a few w/ higher contam
+scr_hff$inner_iterations$`BlankPCR2`$gamma %>% plot() # only 1 w/ major contam
+
+# *Note* can not estimate well-to-well leakage with the aspatial SCRuB run
+```
+
+```{r, include=FALSE}
+# # save out scrub-ed matrix
+# decon_f <- scr_f$decontaminated_samples
+# write.csv(decon_f, "./data/Tri5MBBarleyEndos_R2Fung_SbyS_scrub.csv")
+# decon_hfh <- scr_hff$decontaminated_samples
+# write.csv(decon_hfh, "./data/HF_Fung_SbyS_scrub.csv")
+decon_f <- read.csv("./data/Tri5MBBarleyEndos_R2Fung_SbyS_scrub.csv", row.names = 1) %>% as.matrix()
+decon_hff <- read.csv("./data/HF_Fung_SbyS_scrub.csv", row.names = 1) %>% as.matrix()
+
+# # example matrix comparison
+# mat_f[1:10,1:10]
+# decon_f[1:10,1:10]
+# mat_hff[1:10,1:10]
+# decon_hff[1:10,1:10]
+
+# save new ps objects
+ps_r2_f_curated0 <- subset_samples(ps_r2_f_assn, 
+                        sample_names(ps_r2_f_assn) %in% rownames(decon_f))
+ps_r2_f_curated <- ps_r2_f_curated0
+mat_f_final <- otu_table(decon_f, taxa_are_rows = FALSE)
+otu_table(ps_r2_f_curated) <- mat_f_final
+# ps_r2_f_curated0@otu_table["ND-P04-H10",1:10] #prior SCRuB
+# ps_r2_f_curated@otu_table["ND-P04-H10",1:10]   #post SCRuB
+ps_r2_f_curated <- filter_taxa(ps_r2_f_curated, function(x) sum(x) > 0, TRUE)
+
+ps_hf_f_curated0 <- subset_samples(ps_r2_f_assn, 
+                        sample_names(ps_r2_f_assn) %in% rownames(decon_hff))
+ps_hf_f_curated <- ps_hf_f_curated0
+mat_hff_final <- otu_table(decon_hff, taxa_are_rows = FALSE)
+otu_table(ps_hf_f_curated) <- mat_hff_final
+# ps_hf_f_curated0@otu_table["ND-P05-H11",1:10] #prior SCRuB
+# ps_hf_f_curated@otu_table["ND-P05-H11",1:10]   #post SCRuB
+ps_hf_f_curated <- filter_taxa(ps_hf_f_curated, function(x) sum(x) > 0, TRUE)
+
+```
+
+* For Tri5MB R2/Barley Endos Fungi - filter leaves 1582 out of 3084
+* For HF Fungi - filter leaves 218 out of 3084 
+* so A LOT were removed from R2, still kind of surprising given the low contamination
+
+
+
+### Why so many taxa lost?
+```{r, include = FALSE}
+# # start
+# ps_r1_b
+# ps_r1_f
+# ps_r2_b
+# ps_r2_f
+# 
+# # merge
+# ps_b
+# ps_f
+# 
+# # tax assn
+# ps_b_assn
+# ps_f_assn
+# 
+# # unmerge
+# ps_r1_b_assn
+# ps_r1_f_assn
+# ps_r2_b_assn
+# ps_r2_f_assn
+# 
+# # after SCRuB
+# ps_r1_b_curated
+# ps_r1_f_curated
+# ps_r2_b_curated
+# ps_hf_b_curated
+# ps_r2_f_curated
+# ps_hf_f_curated
+```
+
+```{r, results = 'hide'}
+# sleuthing
+table(colSums(ps_r2_b_assn@otu_table[sample_names(ps_r2_b_assn) %in% sample_names(ps_r2_b_curated), ]) >0 )
+    # 1158/1885 taxa were in Tri5 sample set before scrub 
+    # 727/1885 taxa were not in Tri5 sample set, meaning they were in negatives or were in HF set
+    # only 655/1158 taxa left over after SCRuB
+table(colSums(ps_r2_b_assn@otu_table[sample_names(ps_r2_b_assn) %in% sample_names(ps_hf_b_curated), ]) >0 )
+    # 1114/1885 taxa were in HF sample set before scrub 
+    # 771/1885 taxa were not in HF sample set, meaning they were in negatives or were in Tri5 set
+    # only 731/1114 taxa left over after SCRuB
+
+table(colSums(ps_r2_f_assn@otu_table[sample_names(ps_r2_f_assn) %in% sample_names(ps_r2_f_curated), ]) >0 )
+    # 2985/3084 taxa were in Tri5-BarleyEndos sample set before scrub 
+    # 99/3084 taxa were not in Tri5-BarleyEndos sample set, meaning they were in negatives or were in HF set
+    # only 1582/2985 taxa left over after SCRuB
+table(colSums(ps_r2_f_assn@otu_table[sample_names(ps_r2_f_assn) %in% sample_names(ps_hf_f_curated), ]) >0 )
+    # 337/3084 taxa were in HF sample set before scrub 
+    # 2747/3084 taxa were not in HF sample set, meaning they were in negatives or were in Tri5-BarleyEndos set
+    # only 218/337 taxa left over after SCRuB
+```
+
+```{r}
+## read loss due to SCRuB
+
+#sum(colSums(ps_r2_b_assn@otu_table[sample_names(ps_r2_b_assn) %in% sample_names(ps_r2_b_curated), ]))
+#sum(colSums(ps_r2_b_curated@otu_table))
+8215385/8228966
+
+#sum(colSums(ps_r2_b_assn@otu_table[sample_names(ps_r2_b_assn) %in% sample_names(ps_hf_b_curated), ]))
+#sum(colSums(ps_hf_b_curated@otu_table))
+9570523/9581934
+
+#sum(colSums(ps_r2_f_assn@otu_table[sample_names(ps_r2_f_assn) %in% sample_names(ps_r2_f_curated), ]))
+#sum(colSums(ps_r2_f_curated@otu_table))
+119790863/121063033
+
+#sum(colSums(ps_r2_f_assn@otu_table[sample_names(ps_r2_f_assn) %in% sample_names(ps_hf_f_curated), ]))
+#sum(colSums(ps_hf_f_curated@otu_table))
+8381728/8393502
+    
+```
+
+```{r, results = 'hide'}
+## look at final sample depths
+sort(rowSums(ps_r1_b_curated@otu_table)) #4 samples <1000 reads
+sort(rowSums(ps_r1_f_curated@otu_table)) #20 samples <1000 reads (all tween control samples)
+
+sort(rowSums(ps_r2_b_curated@otu_table)) #3 samples <1000 reads
+sort(rowSums(ps_hf_b_curated@otu_table)) #5 samples <1000 reads
+
+sort(rowSums(ps_r2_f_curated@otu_table)) #45 samples <1000 reads, 35 samples >1mil reads
+sort(rowSums(ps_hf_f_curated@otu_table)) #0 samples <1000 reads, 4 samples >1mil reads
+
+```
+
+#### CURATION SUMMARY
+* Ok, so something fundamentally odd going on with the HackFlex test. For the bacteria in particular, should have been essentially overlapping taxa with regular prep (Tri5) - but instead we see wildly divergent ASV overlaps. Still evidence of something odd with the fungi HackFlex test, though fewer samples, so less dramatically noticeable.
+* SCRuB decontamination removed a large number of taxa (likely low abundance) from all the R2 datasets. 34%-47% of taxa by count removed across all four R2 linked datasets.
+* However, because of the way SCRuB accounts for sample depth overall in balancing read loss due to contamination, the total read loss was minimal, ranging from 0.12% - 1.05% across all four R2 linked datasets.
+* fungal datasets may struggle with low read depth samples, R1 Tri5 project is mostly Tween (indicating lack of Fusarium biomass), TBD for the R2-BarleyEndos combination.
+
+
+
+
+# Save out ps objects
+*  separate BarleyEndos project & rename objs for simplicity
+```{r}
+## R1 Tri5MB
+ps_r1b <- ps_r1_b_curated; ps_r1b
+ps_r1f <- ps_r1_f_curated; ps_r1f
+
+## R2 Tri5MB
+ps_r2b <- ps_r2_b_curated; ps_r2b
+ps_r2f <- subset_samples(ps_r2_f_curated, project == "Tri5MB" | project == "control")
+ps_r2f <- filter_taxa(ps_r2f, function(x) mean(x) > 0, TRUE ); ps_r2f
+
+## BarleyEndos
+ps_be <- subset_samples(ps_r2_f_curated, project == "BarleyEndos" | project == "control")
+ps_be <- filter_taxa(ps_be, function(x) mean(x) > 0, TRUE ); ps_be
+
+## HackFlex Tests
+ps_hfb <- ps_hf_b_curated; ps_hfb
+ps_hff <- ps_hf_f_curated; ps_hff
+
+
+## save out non-HF equivalent for the fungal samples, for later comparisons
+#levels(ps_hff@sam_data$Sample_ID)
+samps_in_r2f <- c("Fun.Mock*-F", "J-PH1-04-R2-F", "H-Tri5-02-R2-F", "J-PH1-07-R2-F")
+samps_in_be  <- c("ND02.16.D-F", "ND02.29.D-F", "ND02.29.H-F", "ND04.02.D-F", "ND04.11.D-F", "ND04.13.D-F", "ND04.20.D-F", "ND04.27.H-F", "ND08.15.H-F", "ND08.16.H-F", "ND09.24.H-F")
+out1 <- subset_samples(ps_r2f, Sample_ID %in% samps_in_r2f)
+out2 <- subset_samples(ps_be, Sample_ID %in% samps_in_be)
+ps_not_hff <- merge_phyloseq(out1, out2)
+ps_not_hff <- filter_taxa(ps_not_hff, function(x) mean(x) > 0, TRUE ); ps_not_hff
+
+```
+
+* saving out ps objects code is hidden
+```{r, include = FALSE}
+# ## R1 Tri5MB
+# writeXStringSet(refseq(ps_r1b),
+#                 filepath = "./data/R1Bact_curatedSeqs.fasta")
+# save(ps_r1b, file="./data/ps_r1b_curated.RData")
+# writeXStringSet(refseq(ps_r1f),
+#                 filepath = "./data/R1Fung_curatedSeqs.fasta")
+# save(ps_r1f, file="./data/ps_r1f_curated.RData")
+# 
+# ## R2 Tri5MB
+# writeXStringSet(refseq(ps_r2b),
+#                 filepath = "./data/R2Bact_curatedSeqs.fasta")
+# save(ps_r2b, file="./data/ps_r2b_curated.RData")
+# writeXStringSet(refseq(ps_r2f),
+#                 filepath = "./data/R2Fung_curatedSeqs.fasta")
+# save(ps_r2f, file="./data/ps_r2f_curated.RData")
+# 
+# ## BarleyEndos
+# writeXStringSet(refseq(ps_be),
+#                 filepath = "./data/BarleyEndos_curatedSeqs.fasta")
+# save(ps_be, file="./data/BarleyEndos_ps_curated.RData")
+# 
+# ## HackFlex Tests
+# writeXStringSet(refseq(ps_hfb),
+#                 filepath = "./data/HackFlexBact_curatedSeqs.fasta")
+# save(ps_hfb, file="./data/HackFlex_ps_hfb_curated.RData")
+# writeXStringSet(refseq(ps_hff),
+#                 filepath = "./data/HackFlexFung_curatedSeqs.fasta")
+# save(ps_hff, file="./data/HackFlex_ps_hff_curated.RData")
+# ## NOTE - for the Bact comparison, will want the ps_r2b object, 
+# ##     for fungi - want the following:
+# writeXStringSet(refseq(ps_not_hff),
+#                 filepath = "./data/HackFlexFung_notHF_curatedSeqs.fasta")
+# save(ps_not_hff, file="./data/HackFlex_ps_not_hff_curated.RData")
+```
+
+* The following ps objects will be needed for each major project:
+```{r}
+
+load("./data/ps_r1b_curated.RData")              #ps_r1b
+load("./data/ps_r1f_curated.RData")              #ps_r1f
+load("./data/ps_r2b_curated.RData")              #ps_r2b
+load("./data/ps_r2f_curated.RData")              #ps_r2f
+
+load("./data/BarleyEndos_ps_curated.RData")      #ps_be
+
+load("./data/HackFlex_ps_hfb_curated.RData")     #ps_hfb
+load("./data/ps_r2b_curated.RData")              #ps_r2b
+load("./data/HackFlex_ps_hff_curated.RData")     #ps_hff
+load("./data/HackFlex_ps_not_hff_curated.RData") #ps_not_hff
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+sessionInfo()
+```
+
+
+
+##### end
