@@ -1,0 +1,627 @@
+---
+title: "Differential Abundance"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+author: "Briana K. Whitaker"
+date: "`r Sys.Date()`"
+---
+\fontsize{9}{10}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=3.5, fig.height=3,
+                      warning=FALSE, message=FALSE)
+```
+---
+
+* Run using `r version[['version.string']] `.
+
+# Objective
+This document reports on the **differential abundance analysis** of the R1 experiment performed in the Fall of 2023 (completed Dec 2023) and R2 experiment performed in the Spring of 2024 (completed spring/summer 2024). Data represents the output of Miseq (R1) and NextSeq (R2) sequencing run of the Tri5 Mutant Microbiome project (Guixia Hao & Briana K. Whitaker & Nick Rhoades). 
+
+* Run this code two ways: 1) with no filtering of taxa by sequencing read counts, 2) with some filtering (except for r1f which has too few taxa to adequately filter) 
+
+
+```{r PRELOAD, echo=FALSE, results='hide', include=FALSE} 
+x<-c("ggplot2", "phyloseq", "DESeq2",  "tidyr", "dplyr", "ggVennDiagram", "Biostrings")
+lapply(x, require, character.only = TRUE)
+
+#Load functions
+source("./code/multiplot.function.R")
+#add 'not in' function
+`%nin%` = Negate(`%in%`)
+# geometric mean
+gm_mean_protected <- function(x) {
+  if (all(x == 0)) {
+    return (0)
+  }
+  exp(mean(log(x[x != 0])))
+}
+
+#set seed
+set.seed(555)
+
+# set ggplot2 theme
+theme_set(theme_bw(base_size=11)) 
+theme_update(panel.grid.major=element_line(0), panel.grid.minor=element_line(0))
+
+# color palettes
+strain_col <- c("#D95F02", "#7570B3", "#1B9E77")
+```
+
+# Load Phyloseq
+```{r}
+load(file="./data/ps_r1b_curated2.RData"); ps_r1b
+load(file="./data/ps_r1f_curated2.RData"); ps_r1f
+load(file="./data/ps_r2b_curated2.RData"); ps_r2b
+load(file="./data/ps_r2f_curated2.RData"); ps_r2f
+
+```
+
+```{r, include = FALSE}
+#levels(ps_r1b@sam_data$Strain)   ##c("PH-1", "Tri5-M9-1", "Tween")
+
+## rename levels of Strain, DESeQ2 doesn't like hyphens
+levels(ps_r1b@sam_data$Strain) <- c("PH1", "Tri5", "Cont")
+levels(ps_r1f@sam_data$Strain) <- c("PH1", "Tri5", "Cont")
+levels(ps_r2b@sam_data$Strain) <- c("PH1", "Tri5", "Cont")
+levels(ps_r2f@sam_data$Strain) <- c("PH1", "Tri5", "Cont")
+
+```
+
+# DESeq base model
+* note - that the design matrix is only used in estimating dispersion & log2fold changes, but not sizeFactors
+* Create DESeq2 datasets for MAIN EFFECTS (no interaction terms)
+* See DESeq2 vignette for explanation of why including interaction terms alters interpretation of main effects (justification for doing 2 separate models: main effects only and interactions only)
+
+```{r, results = 'hide', fig.width =4, fig.height = 4}
+dds_r2b <- phyloseq_to_deseq2(ps_r2b, ~ 1)   #no model for now
+dds_r2b_main <- DESeqDataSet(dds_r2b, ~ Strain + Chamber.Rep)
+dds_r2b_main <- estimateSizeFactors(dds_r2b_main,
+              geoMeans = apply(counts(dds_r2b_main), 1, gm_mean_protected))
+#FILTERING STEP
+    nc <- counts(dds_r2b_main, normalized = FALSE)
+    filter <- rowSums(nc >= 2) >= 6 # 6 is half the reps per treatment combo
+    table(filter)
+    dds_r2b_main <- dds_r2b_main[filter,]
+# END FILTERING STEP
+dds_r2b_main <- DESeq(dds_r2b_main, test="Wald", fitType="local") #embedded dispersion estimates
+plotDispEsts(dds_r2b_main)
+```
+* IF we filter out taxa that do not have at least 2 reads across each of 6 samples
+    * r1b 20/136 taxa
+    * r1f 5/35 taxa **don't filter, too few taxa
+    * r2b 28/641 taxa
+    * r2f 39/249 taxa
+
+```{r, include = FALSE}
+# dds_r1b <- phyloseq_to_deseq2(ps_r1b, ~ 1)   #no model for now
+# dds_r1b_main <- DESeqDataSet(dds_r1b, ~ Strain + Chamber.Rep)
+# dds_r1b_main <- estimateSizeFactors(dds_r1b_main,
+#               geoMeans = apply(counts(dds_r1b_main), 1, gm_mean_protected))
+# # nc <- counts(dds_r1b_main, normalized = FALSE)
+# # filter <- rowSums(nc >= 2) >= 6 # 6 is half the reps per treatment combo
+# # table(filter)
+# # dds_r1b_main <- dds_r1b_main[filter,]
+# dds_r1b_main <- DESeq(dds_r1b_main, test="Wald", fitType="local") #embedded dispersion estimates
+# plotDispEsts(dds_r1b_main)
+# 
+# dds_r1f <- phyloseq_to_deseq2(ps_r1f, ~ 1)   #no model for now
+# dds_r1f_main <- DESeqDataSet(dds_r1f, ~ Strain + Chamber.Rep)
+# dds_r1f_main <- estimateSizeFactors(dds_r1f_main,
+#               geoMeans = apply(counts(dds_r1f_main), 1, gm_mean_protected))
+# ## nc <- counts(dds_r1f_main, normalized = FALSE)
+# ## filter <- rowSums(nc >= 2) >= 6 # 6 is half the reps per treatment combo
+# ## table(filter)
+# ## dds_r1f_main <- dds_r1f_main[filter,]
+# dds_r1f_main <- DESeq(dds_r1f_main, test="Wald", fitType="local") #embedded dispersion estimates
+# plotDispEsts(dds_r1f_main)
+# 
+# # r2b - above
+# 
+# dds_r2f <- phyloseq_to_deseq2(ps_r2f, ~ 1)   #no model for now
+# dds_r2f_main <- DESeqDataSet(dds_r2f, ~ Strain + Chamber.Rep)
+# dds_r2f_main <- estimateSizeFactors(dds_r2f_main,
+#               geoMeans = apply(counts(dds_r2f_main), 1, gm_mean_protected))
+# # nc <- counts(dds_r2f_main, normalized = FALSE)
+# # filter <- rowSums(nc >= 2) >= 6 # 6 is half the reps per treatment combo
+# # table(filter)
+# # dds_r2f_main <- dds_r2f_main[filter,]
+# dds_r2f_main <- DESeq(dds_r2f_main, test="Wald", fitType="local") #embedded dispersion estimates
+# plotDispEsts(dds_r2f_main)
+
+```
+
+
+
+### Wald Tests - log2 fold changes due to main effects
+* BH correction for FDR already used as default in wald tests
+```{r, echo = FALSE, results = 'hide'}
+# # for loops for MAIN EFFECT pairwise contrasts
+# l2fc <- data.frame("baseMean" = numeric(), "log2FoldChange" = numeric(),
+#                    "lfcSE" = numeric(), "stat" = numeric(), "pvalue"=numeric(),
+#                    "padj" = numeric(), "Taxon" = factor(), "Term" = factor(),
+#                    "Contrast" = factor(), RepKing = factor())
+```
+
+* Here for the Strain main effect
+```{r, results = 'hide'}
+# ## Get all pairwise 'Strain' contrasts
+# StrainList <- c("PH1", "Tri5", "Cont")
+# RepKingdomList <- c('r1b', 'r1f', 'r2b', 'r2f')
+# 
+# for (repking in RepKingdomList) {
+#   #repking <- RepKingdomList[1] # debug
+#   mydds <- get(paste0('dds_', repking, "_main"))
+#   print(paste('start', repking))
+#     for (j in 1:(length(StrainList)-1)) { # j = index of 1st strain
+#       #j <- 1 #debug
+#       strain1 <- StrainList[j]
+#         for (k in (j+1):length(StrainList)) { # k = index of 2nd strain
+#           #k <- 2 #debug
+#           strain2 <- StrainList[k]
+#           print(paste0(strain1,".",strain2)) # debugging line
+#           # get log2 fold change between this pair of X
+#           results(mydds, contrast = c('Strain', strain1, strain2), alpha = 0.05) %>%
+#             as.data.frame %>% mutate(Taxon = row.names(.), Term = 'Strain',
+#             Contrast = paste0(strain1, '_', strain2), RepKing = repking) %>%
+#             rbind(.,l2fc) -> l2fc
+#         }
+#     }
+#   rm(mydds) # clean up
+# }
+# rm(strain1, strain2, repking, j, k) # clean up
+```
+
+### Adjust p-values again for multiple comparisons
+* For each ASV, there is a p-value for each contrast between each pair of Main effects 
+* the P-value for each of these contrasts has already been corrected for multiple comparisons (i.e., 1 test for each ASV)
+* To get the "effect-level" p-values, adjust again for multiple comparisons within each Term (i.e., 1 test for each pairwise group contrast within each Term)
+* This correction asks whether all of the log2 fold changes between group pairs are simultaneously nonzero
+* Here, the 'strain' term has potentially 3 total #s of comparisons for each strain-strain comparison, so we need to correct for those 3 #s of independent hypotheses.
+
+```{r}
+# ## version where no filtering of taxa was done during creation of deseq2 objects
+# #write.csv(l2fc, "./data/Tri5MB_deseq_mainEffects_contrasts.csv")
+# l2fc <- read.csv("./data/Tri5MB_deseq_mainEffects_contrasts-edit.csv", 
+#                  row.names = 1, stringsAsFactors = TRUE) #manually add b or f to the ASV column
+
+# #version where YES filtering of taxa was done during creation of deseq2 objects
+#write.csv(l2fc, "./data/Tri5MB_deseq_mainEffects_contrasts_filtered.csv")
+l2fc <- read.csv("./data/Tri5MB_deseq_mainEffects_contrasts_filtered-edit.csv", 
+                 row.names = 1, stringsAsFactors = TRUE) #manually add b or f to the ASV column
+
+group_by(l2fc, RepKing, Term, Taxon) %>% 
+    mutate(padjadj = p.adjust(padj, method='BH')) %>% 
+    ungroup %>% as.data.frame -> l2fc
+
+table(l2fc$padj <= 0.05)  
+table(l2fc$padjadj <= 0.05) # after additional correction
+
+table(l2fc$padjadj <= 0.05 & l2fc$log2FoldChange >= 2)  #signif & >=2 fold change
+```
+
+
+### Organize
+```{r}
+# Set a boolean column for significance
+l2fc$significant <- as.factor(ifelse(l2fc$padjadj <= .05, "Significant", NA))
+l2fc$ASV <- l2fc$Taxon
+
+# ## set a column for TAXONOMIC INFO, to color results by
+# # first make taxa tables dataframes, and add unique ASV column
+# tax_r1b <- data.frame(ps_r1b@tax_table)
+# tax_r1b$ASV <- paste("b", rownames(tax_r1b), sep = "")
+# tax_r1f <- data.frame(ps_r1f@tax_table)
+# tax_r1f$ASV <- paste("f", rownames(tax_r1f), sep = "")
+# tax_r2b <- data.frame(ps_r2b@tax_table)
+# tax_r2b$ASV <- paste("b", rownames(tax_r2b), sep = "")
+# tax_r2f <- data.frame(ps_r2f@tax_table)
+# tax_r2f$ASV <- paste("f", rownames(tax_r2f), sep = "")
+# 
+# #combine taxa tables, first b then f, then all
+# uni_r2b <- tax_r2b$ASV[tax_r2b$ASV %nin% tax_r1b$ASV]
+# tax_b <- bind_rows(tax_r1b, tax_r2b[tax_r2b$ASV %in% uni_r2b,]  )
+# uni_r2f <- tax_r2f$ASV[tax_r2f$ASV %nin% tax_r1f$ASV]
+# tax_f <- bind_rows(tax_r1f, tax_r2f[tax_r2f$ASV %in% uni_r2f,]  )
+# tax_all <- bind_rows(tax_b, tax_f)
+# rownames(tax_all) <- tax_all$ASV
+# #write.csv(tax_all, "./data/taxonomicTable_all.csv")
+tax_all <- read.csv("./data/taxonomicTable_all-edit.csv",
+                    row.names = 1)
+
+# merge with l2fc results
+l2fc <- left_join(l2fc, tax_all, by = "ASV")
+
+```
+
+
+### Notes for MS
+```{r}
+# median fold change, use abs() for magnitude not direction
+# use (2^) to back-transform from log2fold changes to just fold change
+# only look at significant enrichments/depletions
+
+# median log2 fold change (no back transform)
+l2fc %>% 
+  filter(significant == "Significant") %>%
+  group_by(Contrast) %>% 
+  summarize(medianFC = median(abs(log2FoldChange), na.rm = TRUE)) %>% 
+  ungroup %>% as.data.frame -> medianlogFCs
+medianlogFCs # this is the log2 fold change
+
+l2fc %>% filter(significant == "Significant") %>% droplevels -> l2fc_signif
+
+table(l2fc_signif$RepKing)
+table(l2fc_signif$class)
+length(table(l2fc_signif$ASV))
+#table(l2fc_signif$RepKing, l2fc_signif$log2FoldChange>0, l2fc_signif$Contrast) 
+table(l2fc_signif$log2FoldChange>0, l2fc_signif$Contrast) 
+
+```
+* log2 fold-change: positive values indicate enrichment in 1st listed strain in the contrast, whereas negative values indicate enrichment the 2nd listed strain.
+
+
+# Figures
+
+
+### Bar Plot
+* https://forum.posit.co/t/preserve-constant-bar-widths-for-uneven-faceted-plots/26837 to get bars same width across facets
+```{r, results = 'hide', echo = FALSE, fig.width = 9, fig.height = 9}
+taxa_col <- c("#1B9E77", "#D95F02", "#E7298A", "#7570B3", "#377EB8", "#66A61E", "#E6AB02", "#A6761D")
+
+# subset & organize df for bar plot
+out <- l2fc_signif %>% filter(RepKing!="r1f") %>% droplevels
+sub <- out
+sub$class <- as.factor(sub$class)
+levels(sub$class)[1] <- "Unk_Ascomycota"
+sub$class <- factor(sub$class, 
+    levels = c("Actinobacteria", "Alphaproteobacteria", "Bacilli", "Gammaproteobacteria",
+               "Unk_Ascomycota","Dothideomycetes", "Sordariomycetes", "Ustilaginomycetes"))
+levels(sub$RepKing)[1] <- "R1-Bacteria"
+levels(sub$RepKing)[2] <- "R2-Bacteria"
+levels(sub$RepKing)[3] <- "R2-Fungi"
+# "log2 fold-change: positive values indicate enrichment in 1st listed strain in the contrast, whereas negative values indicate enrichment the 2nd listed strain."
+levels(sub$Contrast)[1] <- "<-- Control : PH1 -->" # so need to reverse the listing order to match how plot is read
+levels(sub$Contrast)[2] <- "<-- Tri5 : PH1 -->"
+levels(sub$Contrast)[3] <- "<-- Control : Tri5 -->"
+
+b0 <- ggplot(sub, 
+       aes(x = simple_name, y = log2FoldChange, fill = class)) + 
+    facet_grid(RepKing~Contrast, scales = "free", space = "free") +
+    coord_flip() +
+    geom_hline(yintercept = 0, colour="gray50", linewidth=1, linetype = 2) +
+    geom_col(width = 0.9, position = position_dodge2(width = 0.9, preserve = "single") ) +
+    scale_x_discrete("") +
+    scale_y_continuous( expression(paste("Log"[2], " Fold Change")) , breaks = c(-20, -10, 0, 10, 20)) +
+    scale_fill_manual("", values = taxa_col) +
+    theme(legend.position = "bottom", legend.byrow = TRUE)
+#tiff("./figures/BarPlot_all.tiff", width=8, height=7, units="in", res=300)
+b0
+#dev.off()
+
+```
+
+# Heatmap
+```{r}
+require(reshape2)
+out %>% 
+    mutate(Var = paste(Contrast, RepKing, sep = "-")) %>% 
+    select(Var, simple_name, log2FoldChange) -> out2 #RepKing, 
+# create wide format
+sub_w <- dcast(out2, simple_name ~ Var, value.var = "log2FoldChange", 
+               drop = FALSE, fill = 0)
+rownames(sub_w) <- sub_w$simple_name
+sub_w %>% select(-simple_name) %>% as.matrix() -> sub_w
+
+sub_dist <- cor(sub_w, method = 'pearson')
+sub_clust <- hclust(as.dist(sub_dist), method = "ward.D2")
+
+par(mfrow = c(1,1)); plot(sub_clust)
+require(ComplexHeatmap)
+#require(gclus)
+#sub_clust_k2 <- kmeans(sub_clust, centers = 3, nstart = 1000, iter.max = 10)
+
+Heatmap(sub_w, 
+        show_row_names = TRUE, show_column_names = TRUE, 
+        row_dend_reorder = TRUE,
+        clustering_distance_rows = "pearson",
+        clustering_method_rows = "ward.D2")
+        #cluster_columns = FALSE)
+
+Heatmap(sub_w, 
+        show_row_names = TRUE, show_column_names = TRUE, 
+        row_dend_reorder = TRUE,
+        clustering_distance_rows = "pearson",
+        clustering_method_rows = "ward.D2",
+        cluster_columns = FALSE)
+
+
+#c("#CC79A7", "#D55E00", "#0072B2", "#F0E442", "#009E73", "#56B4E9", "#E69F00", "#000000")
+
+```
+
+# correlations?
+
+```{r}
+require(stringr)
+require(vegan)
+
+# create df
+SbyE_r1b <- (as(sample_data(ps_r1b), "data.frame"))
+SbyS_r1b <- (as(otu_table(ps_r1b), "matrix"))
+SbyS_rel_r1b <- decostand(SbyS_r1b, method = 'hellinger')
+# identify signif ASVs
+signif_r1b <- unique(sub$ASV[sub$RepKing=="R1-Bacteria"])
+signif_r1b <- str_extract(signif_r1b, "(?<=b).*")
+# merge & convert to long format
+identical(rownames(SbyS_rel_r1b), rownames(SbyE_r1b)) #sanity check
+SbyE_r1b <- data.frame(SbyE_r1b ,SbyS_rel_r1b[,signif_r1b])
+SbyE_l_r1b <- SbyE_r1b %>% 
+    select(Sample_ID,Chamber.Rep, Strain, FgTa_ratio, ugDON_per_g, contains('ASV')) %>%
+    pivot_longer(cols = contains("ASV"), names_to = "ASV", values_to = "Relative_Abundance")
+
+# create df
+SbyE_r2b <- (as(sample_data(ps_r2b), "data.frame"))
+SbyS_r2b <- (as(otu_table(ps_r2b), "matrix"))
+SbyS_rel_r2b <- decostand(SbyS_r2b, method = 'hellinger')
+# identify signif ASVs
+signif_r2b <- unique(sub$ASV[sub$RepKing=="R2-Bacteria"])
+signif_r2b <- str_extract(signif_r2b, "(?<=b).*")
+# merge & convert to long format
+identical(rownames(SbyS_rel_r2b), rownames(SbyE_r2b)) #sanity check
+SbyE_r2b <- data.frame(SbyE_r2b ,SbyS_rel_r2b[,signif_r2b])
+SbyE_l_r2b <- SbyE_r2b %>% 
+    select(Sample_ID,Chamber.Rep, Strain, FgTa_ratio, ugDON_per_g, contains('ASV')) %>%
+    pivot_longer(cols = contains("ASV"), names_to = "ASV", values_to = "Relative_Abundance")
+
+# create df
+SbyE_r2f <- (as(sample_data(ps_r2f), "data.frame"))
+SbyS_r2f <- (as(otu_table(ps_r2f), "matrix"))
+SbyS_rel_r2f <- decostand(SbyS_r2f, method = 'hellinger')
+# identify signif ASVs
+signif_r2f <- unique(sub$ASV[sub$RepKing=="R2-Fungi"])
+signif_r2f <- str_extract(signif_r2f, "(?<=f).*")
+# merge & convert to long format
+identical(rownames(SbyS_rel_r2f), rownames(SbyE_r2f)) #sanity check
+SbyE_r2f <- data.frame(SbyE_r2f ,SbyS_rel_r2f[,signif_r2f])
+SbyE_l_r2f <- SbyE_r2f %>% 
+    select(Sample_ID,Chamber.Rep, Strain, FgTa_ratio, ugDON_per_g, contains('ASV')) %>%
+    pivot_longer(cols = contains("ASV"), names_to = "ASV", values_to = "Relative_Abundance")
+
+
+
+# plots
+ggplot(SbyE_l_r1b, aes(x = ugDON_per_g, y = Relative_Abundance)) +
+    facet_wrap(.~ASV, scales = "free_y") +
+    scale_x_continuous(trans = "sqrt") +
+    geom_point() + 
+    geom_smooth(method = 'glm', formula = 'y ~ x')
+ggplot(SbyE_l_r1b, aes(x = FgTa_ratio, y = Relative_Abundance)) +
+    facet_wrap(.~ASV, scales = "free_y") +
+    scale_x_continuous(trans = "sqrt") +
+    geom_point() + 
+    geom_smooth(method = 'glm', formula = 'y ~ x')
+
+ggplot(SbyE_l_r2b, aes(x = ugDON_per_g, y = Relative_Abundance)) +
+    facet_wrap(.~ASV, scales = "free_y") +
+    scale_x_continuous(trans = "sqrt") +
+    geom_point() + 
+    geom_smooth(method = 'glm', formula = 'y ~ x')
+ggplot(SbyE_l_r2b, aes(x = FgTa_ratio, y = Relative_Abundance)) +
+    facet_wrap(.~ASV, scales = "free_y") +
+    scale_x_continuous(trans = "sqrt") +
+    geom_point() + 
+    geom_smooth(method = 'glm', formula = 'y ~ x')
+
+ggplot(SbyE_l_r2f, aes(x = ugDON_per_g, y = Relative_Abundance)) +
+    facet_wrap(.~ASV, scales = "free_y") +
+    scale_x_continuous(trans = "sqrt") +
+    geom_point() + 
+    geom_smooth(method = 'glm', formula = 'y ~ x')
+ggplot(SbyE_l_r2f, aes(x = FgTa_ratio, y = Relative_Abundance)) +
+    facet_wrap(.~ASV, scales = "free_y") +
+    scale_x_continuous(trans = "sqrt") +
+    geom_point() + 
+    geom_smooth(method = 'glm', formula = 'y ~ x')
+```
+
+
+
+
+
+
+# older stuff -->
+
+### Mean Abundance
+* not included
+```{r, include = FALSE}
+l2fc$baseMean_01 <- (l2fc$baseMean + 0.01) #1377 0s in dataset, but next lowest value is 0.012
+ma_plot <- ggplot(l2fc, 
+       aes(x = baseMean_01, y = log2FoldChange, 
+           colour = significant, alpha = significant, size = significant)) + 
+    facet_grid(Contrast~RepKing, scales = "free_y") +
+    geom_hline(yintercept = 0, colour="black", linewidth=1, linetype = 1) + 
+    geom_hline(yintercept = 2, colour="coral3", linewidth=1, linetype = 3) + 
+    geom_hline(yintercept = -2, colour="coral3", linewidth=1, linetype = 3) + 
+    geom_point() + 
+    scale_y_continuous("Log2 Fold Change") +   #limits=c(-3, 3) #, oob=squish
+    scale_x_continuous("Mean of Normalized Counts", trans = "log10") + 
+    scale_colour_manual("", values=c("Significant" = "#D95F02"), na.value= "#666666") + 
+    scale_alpha_manual("", values=c("Significant"= 1), na.value= 0.4) +
+    scale_size_manual("", values=c("Significant"= 3), na.value= 1) +
+    geom_text(data = l2fc %>% filter(significant == "Significant"),
+      aes(label = ASV), size = 3.5,
+            nudge_x = -0.7, nudge_y = -0.5) +
+    theme(legend.position = "bottom",
+       legend.title = element_blank())
+#tiff("./figures/DA_meanAbundancePlot-filtered.tiff", width=12, height=10, units="in", res=300)
+ma_plot
+#dev.off()
+```
+
+```{r, include = FALSE}
+# ma plot by RepKing
+ggplot(l2fc %>% filter(RepKing == "r2f"), 
+       aes(x = baseMean_01, y = log2FoldChange, 
+           colour = significant, alpha = significant, size = significant)) + 
+    facet_grid(.~Contrast, scales = "free_y") +
+    geom_hline(yintercept = 0, colour="black", linewidth=1, linetype = 1) + 
+    geom_hline(yintercept = 2, colour="coral3", linewidth=1, linetype = 3) + 
+    geom_hline(yintercept = -2, colour="coral3", linewidth=1, linetype = 3) + 
+    geom_point() + 
+    scale_y_continuous("Log2 Fold Change") +   #limits=c(-3, 3) #, oob=squish
+    scale_x_continuous("Mean of Normalized Counts", trans = "log10") + 
+    scale_colour_manual("", values=c("Significant" = "#D95F02"), na.value= "#666666") + 
+    scale_alpha_manual("", values=c("Significant"= 1), na.value= 0.4) +
+    scale_size_manual("", values=c("Significant"= 3), na.value= 1) +
+    geom_text(data = l2fc %>% filter(significant == "Significant") %>% filter(RepKing == "r2f"),
+      aes(label = simple_name), size = 2.5,
+            nudge_x = -0.7, nudge_y = -0.9) +
+    theme(legend.position = "bottom",
+       legend.title = element_blank())
+
+```
+
+### by Phylum
+```{r, results = 'hide', echo = FALSE, fig.width = 9, fig.height = 5}
+# add a column that combines info from phylum and significance
+l2fc$phylumSignif <- character(length(l2fc$significant))
+for(x in 1:length(l2fc$significant)) {
+    #x <- 2
+    if(is.na(l2fc$significant[x])) {
+        l2fc$phylumSignif[x] <- "NA"
+    } else {
+        l2fc$phylumSignif[x] <- l2fc$phylum[x]
+    }
+}
+#l2fc$phylumSignif
+
+#Actinobacteriota, Bacteroidota, Firmicutes, Proteobacteria, Ascomycota, Basidiomycota
+
+taxa_col <- c("#377EB8", "#D95F02", "#1B9E77", "#E7298A", "#7570B3", "grey80")   # "#66A61E",
+#DA_effects <- 
+ggplot(l2fc, 
+       aes(x = Contrast, y = log2FoldChange, colour = phylumSignif, size = significant)) + 
+  facet_grid(.~ RepKing) +
+  geom_hline(yintercept = 0, colour="grey30", linewidth=1, linetype = 2) +
+  geom_jitter( width = .3, height = 0) + #size = 1.5,
+  scale_y_continuous(expression(paste("Log"[2]," Fold Change"))) +
+  scale_x_discrete("Expt. Replicate and Microbial Domain") +
+  scale_colour_manual("Phylum", values=taxa_col, na.value= "grey80") +
+  scale_size_manual(values=c("Significant"=3), na.value= 0.8) +
+  guides(size = 'none', colour = guide_legend(override.aes = list(size=3))) #+
+  #geom_text(data = l2fc %>% filter(significant == "Significant"),
+  #  aes(label = simple_name), size = 3.5, nudge_x = 0.1, nudge_y = -0.9)
+```
+
+
+### Venn Diagrams
+```{r, echo = FALSE, results = 'hide', fig.width = 9, fig.height = 5}
+#dim(l2fc_signif)
+
+### identify sets (sets of microbes significant for different treatment combos)
+r1b_PTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1b" & l2fc_signif$Contrast == "PH1_Cont"]); length(r1b_PTw)  #12  9 (filtered)
+r1b_TTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1b" & l2fc_signif$Contrast == "Tri5_Cont"]); length(r1b_TTw) #6  5 (filtered)
+r1b_PT  <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1b" & l2fc_signif$Contrast == "PH1_Tri5"]); length(r1b_PT)    #10  7 (filtered)
+
+r2b_PTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2b" & l2fc_signif$Contrast == "PH1_Cont"]); length(r2b_PTw)  #16  8 (filtered)
+r2b_TTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2b" & l2fc_signif$Contrast == "Tri5_Cont"]); length(r2b_TTw) #10  3 (filtered)
+r2b_PT  <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2b" & l2fc_signif$Contrast == "PH1_Tri5"]); length(r2b_PT)    #19  10 (filtered)
+
+r1f_PTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1f" & l2fc_signif$Contrast == "PH1_Cont"]); length(r1f_PTw)  #2  
+r1f_TTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1f" & l2fc_signif$Contrast == "Tri5_Cont"]); length(r1f_TTw) #2  
+r1f_PT  <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r1f" & l2fc_signif$Contrast == "PH1_Tri5"]); length(r1f_PT)    #0  
+
+r2f_PTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2f" & l2fc_signif$Contrast == "PH1_Cont"]); length(r2f_PTw)  #19  11 (filtered)
+r2f_TTw <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2f" & l2fc_signif$Contrast == "Tri5_Cont"]); length(r2f_TTw) #19  10 (filtered)
+r2f_PT  <- unique(l2fc_signif$Taxon[l2fc_signif$RepKing=="r2f" & l2fc_signif$Contrast == "PH1_Tri5"]); length(r2f_PT)    #11  6 (filtered)
+
+### create set lists for Venn Diagram
+r1b_set <- list(PH1_Cont = r1b_PTw, Tri5_Cont = r1b_TTw, PH1_Tri5 = r1b_PT) 
+#r1f_set    #too little data
+r2b_set <- list(PH1_Cont = r2b_PTw, Tri5_Cont = r2b_TTw, PH1_Tri5 = r2b_PT) 
+r2f_set <- list(PH1_Cont = r2f_PTw, Tri5_Cont = r2f_TTw, PH1_Tri5 = r2f_PT) 
+
+o1 <- ggVennDiagram(r1b_set, label = "count", col = "gray", label_alpha = 0, label_size = 4) +
+    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
+    guides(fill = 'none') +
+    scale_color_manual(values = c(rep("black",4))) +
+    scale_x_continuous(expand = expansion(mult = .2)) +
+    ggtitle("R1 Bact.")
+#bASV38, bASV54 are significantly enriched in all treatments (though I guess this method does not tell you in which direction)
+
+o2 <- ggVennDiagram(r2b_set, label = "count", col = "gray", label_alpha = 0, label_size = 4) +
+    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
+    guides(fill = 'none') +
+    scale_color_manual(values = c(rep("black",4))) +
+    scale_x_continuous(expand = expansion(mult = .2)) +
+    ggtitle("R2 Bact.")
+#bASV51 enriched in all comparisons 
+
+o3 <- ggVennDiagram(r2f_set, label = "count", col = "gray", label_alpha = 0, label_size = 4) +
+    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
+    guides(fill = 'none') +
+    scale_color_manual(values = c(rep("black",4))) +
+    scale_x_continuous(expand = expansion(mult = .2)) +
+    ggtitle("R2 Fungi")
+#fASV16, fASV22, fASV28, enriched in all comparisons 
+
+multiplot(o1,o2,o3, cols = 3)
+```
+
+#### Notes for MS - investigate ASVs shared across contrasts/rounds
+```{r}
+# # investigate the ASVs shared across all 3 contrasts
+# shared3_r1b <- c("bASV38", "bASV54"). #both taxa have potentially consistent results
+# shared3_r2b <- c( "bASV51") # all consistent (baseed on l2fc values)
+# shared3_r2f <- c( "fASV16", "fASV22",  "fASV28") #consistent
+# 
+# l2fc_signif %>% filter(RepKing == "r1b") %>% filter(Taxon %in% shared3_r1b) %>%
+#     select(Taxon,Contrast, log2FoldChange, baseMean, phylum,simple_name) 
+# 
+# l2fc_signif %>% filter(RepKing == "r2b") %>% filter(Taxon %in% shared3_r2b) %>%
+#     select(Taxon,Contrast, log2FoldChange, baseMean, phylum,simple_name) 
+# 
+# l2fc_signif %>% filter(RepKing == "r2f") %>% filter(Taxon %in% shared3_r2f) %>%
+#     select(Taxon,Contrast, log2FoldChange, baseMean, phylum,simple_name) %>% arrange(Taxon)
+
+```
+
+* conclusion: no strong pattern for most shared enrichments between contrasts
+
+```{r}
+### comparing contrasts across experimental rounds
+PTw_set <- list(r1b = r1b_PTw, r2b = r2b_PTw)
+ggVennDiagram(PTw_set, label = "count", col = "gray", label_alpha = 0) +
+    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
+    guides(fill = 'none') +
+    scale_color_manual(values = c(rep("black",4)))
+
+TTw_set <- list(r1b = r1b_TTw, r2b = r2b_TTw)
+ggVennDiagram(TTw_set, label = "count", col = "gray", label_alpha = 0) +
+    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
+    guides(fill = 'none') +
+    scale_color_manual(values = c(rep("black",4)))
+
+PT_set <- list(r1b = r1b_PT, r2b = r2b_PT)
+ggVennDiagram(PT_set, label = "count", col = "gray", label_alpha = 0) +
+    scale_fill_gradient(low="#c6daeb",high = "#2e5c85") +
+    guides(fill = 'none') +
+    scale_color_manual(values = c(rep("black",4)))
+```
+
+* CONCLUDE: ASV5:Enterobacteriaceae is the only bacteria that is enriched in same treatment comparison between the two experimental rounds, (PH1 vs Cont, enriched in Control)
+* not possible to test adequately for fungi
+
+
+```{r}
+sessionInfo()
+```
+
+
+
+###### end
