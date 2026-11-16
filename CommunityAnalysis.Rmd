@@ -1,0 +1,1085 @@
+---
+title: "Community Structure Fungi & Bacteria"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+author: "Briana K. Whitaker"
+date: "`r Sys.Date()`"
+---
+\fontsize{9}{10}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=3.5, fig.height=3,
+                      warning=FALSE, message=FALSE)
+```
+---
+
+* Run using `r version[['version.string']] `.
+
+# OBJECTIVE
+This document reports on the **community analyses** of the combined R1 experiment performed in the Fall of 2023 (completed Dec 2023) and R2 experiment performed in the Spring of 2024 (completed June 2024). Data represents the output of Miseq (R1) and NextSeq (R2) sequencing run of the Tri5 Mutant Microbiome project (Guixia Hao & Briana K. Whitaker & Nick Rhoades). 
+
+# NOTES
+* Changed chamber names for final figures from H/Howard = C1 and J/Josie = C2
+* Removed outliers identified in Shannon Diveristy models from Structure models and PCoA figures: r1b "B-J-T5-1-11"; r2b "J-Tri5-05-R2-B"; r1f "F-J-Twn-4" and "F-H-Twn-6". Removal of the outliers had no effect on the p-values/Fstats (H-diversity or structure), but did improve model fit for the Shannon Diversity models.
+
+```{r, echo=FALSE, results='hide', include=FALSE} 
+x<-c("ggplot2", "phyloseq", "dplyr", "RColorBrewer", "DESeq2", "vegan", "RRPP",
+     "ggVennDiagram", "viridis", "MASS", "car", "Biostrings", "egg", 
+     "BiodiversityR", "tidyr")
+lapply(x, require, character.only = TRUE)
+
+#set seed
+set.seed(128)
+
+#Load functions
+source("./code/multiplot.function.R")
+`%nin%` = Negate(`%in%`)
+gm_mean_protected <- function(x) {
+  if (all(x == 0)) {
+    return (0)
+  }
+  exp(mean(log(x[x != 0])))
+}
+# function for PCoA ellipses - 
+veganCovEllipse <- function (cov, center = c(0, 0), scale = 1, npoints = 100)   {
+  theta <- (0:npoints) * 2 * pi/npoints
+  Circle <- cbind(cos(theta), sin(theta))
+  t(center + scale * t(Circle %*% chol(cov)))    }
+
+# set ggplot2 theme
+theme_set(theme_bw(base_size=12)) 
+theme_update(panel.grid.major=element_line(0), panel.grid.minor=element_line(0))
+
+strain_col <- c("#D95F02", "#7570B3", "#1B9E77") #brewer.pal(3, name = "Dark2")
+
+```
+
+# Load Phyloseq
+```{r}
+load("./data/ps_r1b_curated2.RData"); ps_r1b
+load("./data/ps_r1f_curated2.RData"); ps_r1f
+load("./data/ps_r2b_curated2.RData"); ps_r2b
+load("./data/ps_r2f_curated2.RData"); ps_r2f
+```
+
+
+```{r, echo=FALSE, results='hide'}
+SbyE_r1b <- (as(sample_data(ps_r1b), "data.frame"))
+SbyE_r1f <- (as(sample_data(ps_r1f), "data.frame"))
+SbyE_r2b <- (as(sample_data(ps_r2b), "data.frame"))
+SbyE_r2f <- (as(sample_data(ps_r2f), "data.frame"))
+
+SbyS_r1b <- (as(otu_table(ps_r1b), "matrix"))
+SbyS_r1f <- (as(otu_table(ps_r1f), "matrix"))
+SbyS_r2b <- (as(otu_table(ps_r2b), "matrix"))
+SbyS_r2f <- (as(otu_table(ps_r2f), "matrix"))
+```
+
+```{r, include = FALSE}
+#first make Strain names shorter,
+levels(SbyE_r1b$Strain) <- c("PH1", "Tri5", "Cont")
+levels(SbyE_r1f$Strain) <- c("PH1", "Tri5", "Cont")
+levels(SbyE_r2b$Strain) <- c("PH1", "Tri5", "Cont")
+levels(SbyE_r2f$Strain) <- c("PH1", "Tri5", "Cont")
+
+
+# change chamber names
+levels(SbyE_r1b$Chamber.Rep) <- c("C1", "C2")  #H now C1, J now C2
+levels(SbyE_r1f$Chamber.Rep) <- c("C1", "C2")
+levels(SbyE_r2b$Chamber.Rep) <- c("C1", "C2")
+levels(SbyE_r2f$Chamber.Rep) <- c("C1", "C2")
+
+# then make combo treatment
+SbyE_r1b$Strain_Chamber <- as.factor(paste(SbyE_r1b$Strain, SbyE_r1b$Chamber.Rep, sep = "_"))
+SbyE_r1f$Strain_Chamber <- as.factor(paste(SbyE_r1f$Strain, SbyE_r1f$Chamber.Rep, sep = "_"))
+SbyE_r2b$Strain_Chamber <- as.factor(paste(SbyE_r2b$Strain, SbyE_r2b$Chamber.Rep, sep = "_"))
+SbyE_r2f$Strain_Chamber <- as.factor(paste(SbyE_r2f$Strain, SbyE_r2f$Chamber.Rep, sep = "_"))
+# and change order
+
+SbyE_r1b$Strain_Chamber <- factor(SbyE_r1b$Strain_Chamber, levels = c("PH1_C1",  "PH1_C2",  "Tri5_C1", "Tri5_C2", "Cont_C1", "Cont_C2") )
+SbyE_r1f$Strain_Chamber <- factor(SbyE_r1f$Strain_Chamber, levels = c("PH1_C1",  "PH1_C2",  "Tri5_C1", "Tri5_C2", "Cont_C1", "Cont_C2") )
+SbyE_r2b$Strain_Chamber <- factor(SbyE_r2b$Strain_Chamber, levels = c("PH1_C1",  "PH1_C2",  "Tri5_C1", "Tri5_C2", "Cont_C1", "Cont_C2") )
+SbyE_r2f$Strain_Chamber <- factor(SbyE_r2f$Strain_Chamber, levels = c("PH1_C1",  "PH1_C2",  "Tri5_C1", "Tri5_C2", "Cont_C1", "Cont_C2") )
+
+```
+
+### VST w/ DESeq2 (*hidden*)
+```{r, echo=FALSE, results='hide'}
+# dds_r1b <- phyloseq_to_deseq2(ps_r1b, ~ 1)
+# gmMeans_r1b <- apply(counts(dds_r1b), 1, gm_mean_protected)
+# dds_r1b <- estimateSizeFactors(dds_r1b, type = 'ratio', geoMeans = gmMeans_r1b)
+# dds_r1b <- estimateDispersions(dds_r1b, fitType = "local")
+# #rowData(dds_r1b)
+# #sizeFactors(dds_r1b)
+# plotDispEsts(dds_r1b)
+# save(dds_r1b, file="./data/Tri5MB_dds_r1b.RData")
+# 
+# dds_r1f <- phyloseq_to_deseq2(ps_r1f, ~ 1)
+# gmMeans_r1f <- apply(counts(dds_r1f), 1, gm_mean_protected)
+# dds_r1f <- estimateSizeFactors(dds_r1f, type = 'ratio', geoMeans = gmMeans_r1f)
+# dds_r1f <- estimateDispersions(dds_r1f, fitType = "local")  #not great data/fit, but sparse fits..
+# #rowData(dds_r1f)
+# #sizeFactors(dds_r1f)
+# plotDispEsts(dds_r1f)
+# save(dds_r1f, file="./data/Tri5MB_dds_r1f.RData")
+# 
+# dds_r2b <- phyloseq_to_deseq2(ps_r2b, ~ 1)
+# gmMeans_r2b <- apply(counts(dds_r2b), 1, gm_mean_protected)
+# dds_r2b <- estimateSizeFactors(dds_r2b, type = 'ratio', geoMeans = gmMeans_r2b)
+# dds_r2b <- estimateDispersions(dds_r2b, fitType = "local")
+# #rowData(dds_r2b)
+# #sizeFactors(dds_r2b)
+# plotDispEsts(dds_r2b)
+# save(dds_r2b, file="./data/Tri5MB_dds_r2b.RData")
+# 
+# dds_r2f <- phyloseq_to_deseq2(ps_r2f, ~ 1)
+# gmMeans_r2f <- apply(counts(dds_r2f), 1, gm_mean_protected)
+# dds_r2f <- estimateSizeFactors(dds_r2f, type = 'ratio', geoMeans = gmMeans_r2f)
+# dds_r2f <- estimateDispersions(dds_r2f, fitType = "local")
+# #rowData(dds_r2f)
+# #sizeFactors(dds_r2f)
+# plotDispEsts(dds_r2f)
+# save(dds_r2f, file="./data/Tri5MB_dds_r2f.RData")
+
+load("./data/Tri5MB_dds_r1b.RData")
+load("./data/Tri5MB_dds_r1f.RData")
+load("./data/Tri5MB_dds_r2b.RData")
+load("./data/Tri5MB_dds_r2f.RData")
+
+
+## VST & Euclidean of VST
+VST_r1b <- getVarianceStabilizedData(dds_r1b)
+VST_r1b <- t(VST_r1b)  #taxa as columns
+dist_r1b <- stats::dist(VST_r1b, method="euclidean")
+
+VST_r1f <- getVarianceStabilizedData(dds_r1f)
+VST_r1f <- t(VST_r1f)  #taxa as columns
+dist_r1f <- stats::dist(VST_r1f, method="euclidean")
+
+VST_r2b <- getVarianceStabilizedData(dds_r2b)
+VST_r2b <- t(VST_r2b)  #taxa as columns
+dist_r2b <- stats::dist(VST_r2b, method="euclidean")
+
+VST_r2f <- getVarianceStabilizedData(dds_r2f)
+VST_r2f <- t(VST_r2f)  #taxa as columns
+dist_r2f <- stats::dist(VST_r2f, method="euclidean")
+
+```
+
+### VST w/out Fusarium
+* can not run dds pipeline on _r1f without Fusarium. Leaves too many samples with 0 reads
+```{r, include = FALSE}
+ps_noFus_r1f <- prune_taxa(taxa_names(ps_r1f)[taxa_names(ps_r1f) != "ASV1"] , ps_r1f)
+# ##NOTE## - can not run dds pipeline on _r1f without Fusarium.
+
+ps_noFus_r2f <- prune_taxa(taxa_names(ps_r2f)[taxa_names(ps_r2f) != "ASV1"] , ps_r2f)
+SbyE_noFus_r2f <- (as(sample_data(ps_noFus_r2f), "data.frame"))
+levels(SbyE_noFus_r2f$Strain) <- c("PH1", "Tri5", "Cont")
+levels(SbyE_noFus_r2f$Chamber.Rep) <- c("C1", "C2")
+SbyE_noFus_r2f$Strain_Chamber <- as.factor(paste(SbyE_noFus_r2f$Strain, SbyE_noFus_r2f$Chamber.Rep, sep = "_"))
+SbyS_noFus_r2f <- (as(otu_table(ps_noFus_r2f), "matrix"))
+# dds_noFus_r2f <- phyloseq_to_deseq2(ps_noFus_r2f, ~ 1)
+# gmMeans_noFus_r2f <- apply(counts(dds_noFus_r2f), 1, gm_mean_protected)
+# dds_noFus_r2f <- estimateSizeFactors(dds_noFus_r2f, type = 'ratio', geoMeans = gmMeans_noFus_r2f)
+# dds_noFus_r2f <- estimateDispersions(dds_noFus_r2f, fitType = "local")  #ngood fit
+# #rowData(dds_noFus_r2f)
+# #sizeFactors(dds_noFus_r2f)
+# plotDispEsts(dds_noFus_r2f)
+# save(dds_noFus_r2f, file="./data/Tri5MB_dds_noFus_r2f.RData")
+
+load("./data/Tri5MB_dds_noFus_r2f.RData")
+
+VST_noFus_r2f <- getVarianceStabilizedData(dds_noFus_r2f)
+VST_noFus_r2f <- t(VST_noFus_r2f)  #taxa as columns
+dist_noFus_r2f <- stats::dist(VST_noFus_r2f, method="euclidean")
+```
+
+### Seq Depth
+```{r, include = FALSE}
+SbyE_r1b$depth <- rowSums(SbyS_r1b)
+SbyE_r1f$depth <- rowSums(SbyS_r1f)
+SbyE_r2b$depth <- rowSums(SbyS_r2b)
+SbyE_r2f$depth <- rowSums(SbyS_r2f)
+SbyE_noFus_r2f$depth <- rowSums(SbyS_noFus_r2f)
+```
+
+
+# Basic Taxa Info
+```{r}
+## Total Depth
+depth_r1b <- sum(colSums(otu_table(ps_r1b))); depth_r1b
+depth_r1f <- sum(colSums(otu_table(ps_r1f))); depth_r1f
+depth_r2b <- sum(colSums(otu_table(ps_r2b))); depth_r2b
+depth_r2f <- sum(colSums(otu_table(ps_r2f))); depth_r2f
+
+# Top 10 Taxa
+topten_r1b <- sort(colSums(otu_table(ps_r1b)), decreasing = TRUE)[1:10]
+tax_table(ps_r1b)[names(topten_r1b),c("family", "genus")]
+
+topten_r1f <- sort(colSums(otu_table(ps_r1f)), decreasing = TRUE)[1:10]
+tax_table(ps_r1f)[names(topten_r1f),c("genus")]
+
+topten_r2b <- sort(colSums(otu_table(ps_r2b)), decreasing = TRUE)[1:10]
+tax_table(ps_r2b)[names(topten_r2b),c("order", "family", "genus")]
+
+topten_r2f <- sort(colSums(otu_table(ps_r2f)), decreasing = TRUE)[1:10]
+tax_table(ps_r2f)[names(topten_r2f),c("phylum", "family", "genus")]
+
+# Top 10 Taxa - proportion of reads
+sum(topten_r1b/depth_r1b) 
+sum(topten_r1f/depth_r1f) 
+sum(topten_r2b/depth_r2b) 
+sum(topten_r2f/depth_r2f) 
+
+```
+
+* The proportion of all read counts that the top 10 taxa in each round-kingdom contain indicates a highly biased community, with unequal colonization.
+
+# Venn Diagram
+```{r, echo = FALSE, results = 'hide', fig.height = 4, fig.width = 6}
+### shared between Rounds
+# Bacteria
+r1b_ASVs <- colnames(ps_r1b@otu_table[,colSums(ps_r1b@otu_table) > 0])
+r2b_ASVs <- colnames(ps_r2b@otu_table[,colSums(ps_r2b@otu_table) > 0])
+mySet_b <- list(R1 = r1b_ASVs, R2 = r2b_ASVs) 
+vd_b <- ggVennDiagram(mySet_b, label = "count", col = "gray", label_alpha = 0, label_size = 4) +
+    scale_fill_distiller(palette = "Blues", direction = 1) +
+    guides(fill = 'none') +
+    scale_color_manual(values = c(rep("black",2))) +
+    scale_x_continuous(expand = expansion(mult = .2)) +
+    ggtitle("Bacteria")
+# Fungi
+r1f_ASVs <- colnames(ps_r1f@otu_table[,colSums(ps_r1f@otu_table) > 0])
+r2f_ASVs <- colnames(ps_r2f@otu_table[,colSums(ps_r2f@otu_table) > 0])
+mySet_f <- list(R1 = r1f_ASVs, R2 = r2f_ASVs) 
+vd_f <- ggVennDiagram(mySet_f, label = "count", col = "gray", label_alpha = 0, label_size = 4) +
+    scale_fill_distiller(palette = "Blues", direction = 1) +
+    guides(fill = 'none') +
+    scale_color_manual(values = c(rep("black",2))) +
+    scale_x_continuous(expand = expansion(mult = .2)) +
+    ggtitle("Fungi")
+#tiff("./figures/VD_Rounds.tiff", width=11.5, height=6, units="cm", res=300)
+multiplot(vd_b, vd_f, cols = 2)
+#dev.off()
+
+
+### shared between rounds and Chambers?
+# Bacteria
+table(colSums(subset_samples(ps_r1b, Chamber.Rep == "H")@otu_table) >0) #76
+table(colSums(subset_samples(ps_r1b, Chamber.Rep == "J")@otu_table) >0) #105
+table(colSums(subset_samples(ps_r2b, Chamber.Rep == "H")@otu_table) >0) #412
+table(colSums(subset_samples(ps_r2b, Chamber.Rep == "J")@otu_table) >0) #302
+
+r1b_H <- subset_samples(ps_r1b, Chamber.Rep == "H")  #33 samples
+r1b_H_ASVs <- colnames(r1b_H@otu_table[,colSums(r1b_H@otu_table) > 0])
+
+r1b_J <- subset_samples(ps_r1b, Chamber.Rep == "J")  #36 samples
+r1b_J_ASVs <- colnames(r1b_J@otu_table[,colSums(r1b_J@otu_table) > 0])
+
+r2b_H <- subset_samples(ps_r2b, Chamber.Rep == "H")  #35 samples
+r2b_H_ASVs <- colnames(r2b_H@otu_table[,colSums(r2b_H@otu_table) > 0])
+
+r2b_J <- subset_samples(ps_r2b, Chamber.Rep == "J")  #35 samples
+r2b_J_ASVs <- colnames(r2b_J@otu_table[,colSums(r2b_J@otu_table) > 0])
+
+mySet_b_chambers <- list(R1_H = r1b_H_ASVs, R1_J = r1b_J_ASVs, 
+                         R2_H = r2b_H_ASVs, R2_J = r2b_J_ASVs) 
+
+vd_b_chambers <- ggVennDiagram(mySet_b_chambers, label = "count", 
+              col = "gray", label_alpha = 0, label_size = 4) +
+    scale_fill_distiller(palette = "Blues", direction = 1) +
+    guides(fill = 'none') +
+    scale_color_manual(values = c(rep("black",2))) +
+    scale_x_continuous(expand = expansion(mult = .2)) +
+    ggtitle("Bacteria")
+
+
+# Fungi
+table(colSums(subset_samples(ps_r1f, Chamber.Rep == "H")@otu_table) >0) #17
+table(colSums(subset_samples(ps_r1f, Chamber.Rep == "J")@otu_table) >0) #27
+table(colSums(subset_samples(ps_r2f, Chamber.Rep == "H")@otu_table) >0) #154
+table(colSums(subset_samples(ps_r2f, Chamber.Rep == "J")@otu_table) >0) #170
+
+r1f_H <- subset_samples(ps_r1f, Chamber.Rep == "H")  #29 samples
+r1f_H_ASVs <- colnames(r1f_H@otu_table[,colSums(r1f_H@otu_table) > 0])
+
+r1f_J <- subset_samples(ps_r1f, Chamber.Rep == "J")  #33 samples
+r1f_J_ASVs <- colnames(r1f_J@otu_table[,colSums(r1f_J@otu_table) > 0])
+
+r2f_H <- subset_samples(ps_r2f, Chamber.Rep == "H")  #35 samples
+r2f_H_ASVs <- colnames(r2f_H@otu_table[,colSums(r2f_H@otu_table) > 0])
+
+r2f_J <- subset_samples(ps_r2f, Chamber.Rep == "J")  #35 samples
+r2f_J_ASVs <- colnames(r2f_J@otu_table[,colSums(r2f_J@otu_table) > 0])
+
+mySet_f_chambers <- list(R1_H = r1f_H_ASVs, R1_J = r1f_J_ASVs, 
+                         R2_H = r2f_H_ASVs, R2_J = r2f_J_ASVs) 
+
+vd_f_chambers <- ggVennDiagram(mySet_f_chambers, label = "count", 
+              col = "gray", label_alpha = 0, label_size = 4) +
+    scale_fill_distiller(palette = "Blues", direction = 1) +
+    guides(fill = 'none') +
+    scale_color_manual(values = c(rep("black",2))) +
+    scale_x_continuous(expand = expansion(mult = .2)) +
+    ggtitle("Fungi")
+
+#tiff("./figures/VD_Rounds_Chambers.tiff", width=12, height=16, units="cm", res=300)
+multiplot(vd_b_chambers, vd_f_chambers, cols = 1)
+#dev.off()
+
+```
+
+* Only 16 Bacteria shared in common across all 4 Round-Chamber combinations, and only 5 Fungi.
+* stronger overlap between chambers within Rounds, then between rounds
+
+
+# Relative Abundance Plots
+* *NOTE* - for right now, make sure to look at ASV names, not colors alone. Palettes do not line up across replicate experiments and kingdoms
+```{r, echo = FALSE, results = 'hide', fig.height = 5, fig.width = 9}
+# make an ASV color variable, with gray for 'other'
+#asv_color <- c("#0D0887FF", "#47039FFF", "#7301A8FF", "#9C179EFF", "#BD3786FF", "#D8576BFF", "#ED7953FF", "#FA9E3BFF", "#FDC926FF", "#F0F921FF", "#696969")
+#c(viridis_pal(option = "plasma")(length(levels(dat2_r1b$variable))-1), "#696969")
+
+
+asv_color <- c("#009E73", "#E69F00", "#56B4E9", "#F0E442",   "#0072B2", 
+               "#D55E00", "#CC79A7", "#0D0887FF", "#7301A8FF", "#D8576BFF", 
+               "#DC267F", "#FE6100", '#228833', '#CCBB44', "#785EF0", '#BBBBBB', "#648FFF",
+               "#000000")
+
+asv_color_r1b <- c(asv_color[1], asv_color[3], asv_color[8], asv_color[11:13], 
+                   asv_color[10], asv_color[14:16], asv_color[18])
+asv_color_r2b <- c(asv_color[1:10], asv_color[18])
+
+asv_color_r1f <- c(asv_color[1:2], asv_color[11:16], asv_color[4], asv_color[17], asv_color[18])
+asv_color_r2f <- c(asv_color[1:10], asv_color[18])
+
+
+
+
+#c( "#FFB000",  '#4477AA', '#EE6677',  , '#66CCEE', '#AA3377') # first 5 IMB, next7 are Paul Tol's
+
+toptenNames_r1b <- names(topten_r1b)
+other_r1b <- c(colnames(otu_table(ps_r1b))[colnames(otu_table(ps_r1b)) %nin% toptenNames_r1b])
+dat_r1b <- data.frame(SbyE_r1b[,c("Chamber.Rep", "Strain", "Strain_Chamber")] ,
+    decostand((otu_table(ps_r1b)),"total")[,toptenNames_r1b] ,
+    Other = rowSums(decostand((otu_table(ps_r1b)),"total")[,other_r1b] ))
+dat2_r1b <- reshape2::melt(dat_r1b, id.vars=c("Chamber.Rep", "Strain", "Strain_Chamber")) 
+strain_r1b <- dat2_r1b %>% group_by(Strain_Chamber, variable) %>% summarize(value = sum(value))
+
+plot_r1b <- ggplot(strain_r1b, aes(x = Strain_Chamber, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = 'fill') +
+  scale_fill_manual("ASV", values = asv_color_r1b) +
+  xlab("") + ylab("Relative Abundance") +
+  theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+
+toptenNames_r1f <- names(topten_r1f)
+other_r1f <- c(colnames(otu_table(ps_r1f))[colnames(otu_table(ps_r1f)) %nin% toptenNames_r1f])
+dat_r1f <- data.frame(SbyE_r1f[,c("Chamber.Rep", "Strain", "Strain_Chamber")] ,
+    decostand((otu_table(ps_r1f)),"total")[,toptenNames_r1f] ,
+    Other = rowSums(decostand((otu_table(ps_r1f)),"total")[,other_r1f] ))
+dat2_r1f <- reshape2::melt(dat_r1f, id.vars=c("Chamber.Rep", "Strain", "Strain_Chamber")) 
+strain_r1f <- dat2_r1f %>% group_by(Strain_Chamber, variable) %>% summarize(value = sum(value))
+plot_r1f <- ggplot(strain_r1f, aes(x = Strain_Chamber, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = 'fill') +
+  scale_fill_manual("ASV", values = asv_color_r1f) +
+  xlab("") + ylab("Relative Abundance") +
+  theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+toptenNames_r2b <- names(topten_r2b)
+other_r2b <- c(colnames(otu_table(ps_r2b))[colnames(otu_table(ps_r2b)) %nin% toptenNames_r2b])
+dat_r2b <- data.frame(SbyE_r2b[,c("Chamber.Rep", "Strain", "Strain_Chamber")] ,
+    decostand((otu_table(ps_r2b)),"total")[,toptenNames_r2b] ,
+    Other = rowSums(decostand((otu_table(ps_r2b)),"total")[,other_r2b] ))
+dat2_r2b <- reshape2::melt(dat_r2b, id.vars=c("Chamber.Rep", "Strain", "Strain_Chamber")) 
+strain_r2b <- dat2_r2b %>% group_by(Strain_Chamber, variable) %>% summarize(value = sum(value))
+plot_r2b <- ggplot(strain_r2b, aes(x = Strain_Chamber, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = 'fill') +
+  scale_fill_manual("ASV", values = asv_color_r2b) +
+  xlab("") + ylab("Relative Abundance") +
+  theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+toptenNames_r2f <- names(topten_r2f)
+other_r2f <- c(colnames(otu_table(ps_r2f))[colnames(otu_table(ps_r2f)) %nin% toptenNames_r2f])
+dat_r2f <- data.frame(SbyE_r2f[,c("Chamber.Rep", "Strain", "Strain_Chamber")] ,
+    decostand((otu_table(ps_r2f)),"total")[,toptenNames_r2f] ,
+    Other = rowSums(decostand((otu_table(ps_r2f)),"total")[,other_r2f] ))
+dat2_r2f <- reshape2::melt(dat_r2f, id.vars=c("Chamber.Rep", "Strain", "Strain_Chamber")) 
+strain_r2f <- dat2_r2f %>% group_by(Strain_Chamber, variable) %>% summarize(value = sum(value))
+plot_r2f <- ggplot(strain_r2f, aes(x = Strain_Chamber, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = 'fill') +
+  scale_fill_manual("ASV", values = asv_color_r2f) +
+  xlab("") + ylab("Relative Abundance") +
+  theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+#tiff("./figures/RelAbun_Rounds.tiff", width=24, height=16, units="cm", res=300)
+multiplot(plot_r1b, plot_r1f, plot_r2b, plot_r2f, cols = 2)
+#dev.off()
+
+```
+* Fungi - clear dominance of Fusarium in Fusarium treaetments in both rounds. Highest distribution of diversity in the control treatments. But otherwise, more similarities between Fusarium treatments (PH1 and Tri5 mutant) and betweeen chambers, then is seen for bacteria overall.
+* Bacteria - Dominance of ASV1-Erwiniaceae in Round 1 as well as in several chambers in Round 2. in Round 1 - moderate differences between chambers and between treatments. Stronger chamber and treatment differences in Round 2, with less cohernence in what is actually going on.
+
+
+# Alpha Diversity
+* post-filtering diversity
+```{r, include = FALSE}
+SbyE_r1b$Sdiv <- specnumber(ps_r1b@otu_table@.Data)
+SbyE_r1b$Hdiv <- diversity(ps_r1b@otu_table@.Data)
+
+SbyE_r1f$Sdiv <- specnumber(ps_r1f@otu_table@.Data)
+SbyE_r1f$Hdiv <- diversity(ps_r1f@otu_table@.Data)
+
+SbyE_r2b$Sdiv <- specnumber(ps_r2b@otu_table@.Data)
+SbyE_r2b$Hdiv <- diversity(ps_r2b@otu_table@.Data)
+
+SbyE_r2f$Sdiv <- specnumber(ps_r2f@otu_table@.Data)
+SbyE_r2f$Hdiv <- diversity(ps_r2f@otu_table@.Data)
+
+# no Fusarium versions (fungi datasets only)
+SbyE_r1f$Sdiv_noFus <- specnumber( ps_r1f@otu_table@.Data[,-1] )
+SbyE_r1f$Hdiv_noFus <- diversity(ps_r1f@otu_table@.Data[,-1] )
+
+SbyE_r2f$Sdiv_noFus <- specnumber( ps_r2f@otu_table@.Data[,-1] )
+SbyE_r2f$Hdiv_noFus <- diversity(ps_r2f@otu_table@.Data[,-1] )
+
+# # histograms
+# par(mfrow = c(2,2))
+# hist(sqrt(SbyE_r1b$Hdiv))
+# hist(log(SbyE_r1f$Hdiv))
+# hist(sqrt(SbyE_r2b$Hdiv))
+# hist(sqrt(SbyE_r2f$Hdiv))
+```
+
+### Shannon Diversity
+```{r, fig.keep = 'none'}
+# par(mfrow = c(2,2))
+# par(mfrow = c(1,1))
+
+div_r1b <- lm((Hdiv) ~ Strain * Chamber.Rep,
+              data = SbyE_r1b[SbyE_r1b$Sample_ID != "B-J-T5-1-11",])
+#plot(div_r1b)           #when sqrt used, its good
+#car::boxCox(div_r1b, lambda = seq(0, 1, 0.1))  # about 0.3,
+div_r1b_a <- lm( I(((Hdiv^0.3)-1)/0.3) ~ Strain * Chamber.Rep, 
+              data = SbyE_r1b[SbyE_r1b$Sample_ID != "B-J-T5-1-11",])
+#plot(div_r1b_a)           #good
+Anova(div_r1b_a, type = 3)
+summary(div_r1b_a)$adj.r.squared
+
+
+div_r1f <- lm(log(Hdiv+0.01) ~ Strain * Chamber.Rep, 
+              data = SbyE_r1f[SbyE_r1f$Sample_ID != "F-J-Twn-4" &   #has 0 for hdiv
+                              SbyE_r1f$Sample_ID != "F-H-Twn-6" ,]) #lowest hdiv in its group by a lot
+#plot(div_r1f)           #when those 2 samples are removed, this is ok
+Anova(div_r1f, type = 3) #strain signif
+summary(div_r1f)$adj.r.squared
+div_r1f_a <- lm(I(Hdiv+0.01) ~ Strain * Chamber.Rep, 
+              data = SbyE_r1f[SbyE_r1f$Sample_ID != "F-J-Twn-4" &   #has 0 for hdiv
+                              SbyE_r1f$Sample_ID != "F-H-Twn-6" ,])
+#car::boxCox(div_r1f_a, lambda = seq(-0.5, 0.5, 0.1))  #really close to 0, 
+                                  # so log is the best transformation
+
+
+div_r2b <- lm((Hdiv) ~ Strain * Chamber.Rep,
+              data = SbyE_r2b[SbyE_r2b$Sample_ID !="J-Tri5-05-R2-B",])
+#plot(div_r2b)           #when sqrt is ok/good -
+                        #NOTE -different outlier than richness models
+#car::boxCox(div_r2b, lambda = seq(0, 1, 0.1))  # about 0.5
+div_r2b_a <- lm(I(((Hdiv^0.5)-1)/0.5) ~ Strain * Chamber.Rep, 
+              data = SbyE_r2b[SbyE_r2b$Sample_ID !="J-Tri5-05-R2-B",])
+#plot(div_r2b_a)           #good
+Anova(div_r2b_a, type = 3)
+summary(div_r2b_a)$adj.r.squared
+
+
+div_r2f <- lm((Hdiv) ~ Strain * Chamber.Rep, data = SbyE_r2f)
+#plot(div_r2f)             # bad :/ either sqrt or log
+     # ph1 and tri5 treatments break homoscedasticity, even with transformations
+#car::boxCox(div_r2f, lambda = seq(0, 1, 0.1))   # about 0.4, large 95% CI range
+div_r2f_a <- lm(I(((Hdiv^0.4)-1)/0.4) ~ Strain * Chamber.Rep, data = SbyE_r2f)
+#plot(div_r2f_a)           #bad, but maybe slightly better than reg. transformations
+Anova(div_r2f_a, type = 3)  # but again, signif strain makes sense w/ figure
+summary(div_r2f_a)$adj.r.squared
+
+
+# note, for r2f, 3 samples driving outliers in residuals figures, all from J-Tri5 treatment, but no good reason to remove them, and they are in the range with chamber H and the PH1 treatment. Unlike with r1f where the two outliers were clearly very distinctive within their respective chambers
+```
+
+#### posthocs
+```{r}
+# change models to aov
+div_r1b_aov <- aov( I(((Hdiv^0.3)-1)/0.3) ~ Strain * Chamber.Rep, 
+              data = SbyE_r1b[SbyE_r1b$Sample_ID != "B-J-T5-1-11",])
+div_r1f_aov <- aov(log(Hdiv+0.01) ~ Strain * Chamber.Rep, 
+              data = SbyE_r1f[SbyE_r1f$Sample_ID != "F-J-Twn-4" &
+                              SbyE_r1f$Sample_ID != "F-H-Twn-6" ,])
+div_r2b_aov <- aov(I(((Hdiv^0.5)-1)/0.5) ~ Strain * Chamber.Rep, 
+              data = SbyE_r2b[SbyE_r2b$Sample_ID !="J-Tri5-05-R2-B",])
+div_r2f_aov <- aov(I(((Hdiv^0.4)-1)/0.4) ~ Strain * Chamber.Rep, data = SbyE_r2f)
+
+# Fungi - only test Strain main effect
+TukeyHSD(div_r1f_aov, which = "Strain")
+TukeyHSD(div_r2f_aov, which = "Strain")
+# clear result - fungal diversity in control treatments consistently higher
+
+# Bacteria
+TukeyHSD(div_r1b_aov, which = "Strain") #ph1 higher div than tri5 or cont
+TukeyHSD(div_r2b_aov, which = "Strain") #NS
+
+TukeyHSD(div_r1b_aov, which = "Chamber.Rep") #C2 higher div
+TukeyHSD(div_r2b_aov, which = "Chamber.Rep") #NS
+
+TukeyHSD(div_r1b_aov, which = "Strain:Chamber.Rep")
+TukeyHSD(div_r2b_aov, which = "Strain:Chamber.Rep")
+
+```
+* fungal result clear -- fungal diversity in control treatments consistently higher
+* bacterial results more muddled
+
+
+### Figures
+```{r, include = FALSE}
+# removing same outliers as in Shannon diversity analysis does not change any of the final p-values here, nor the PCoA figure interpretation.
+
+#subset out potential outliers
+VST2_r1b <- VST_r1b[rownames(VST_r1b) != "B-J-T5-1-11",]
+VST2_r1f <- VST_r1f[rownames(VST_r1f) != "F-J-Twn-4" & rownames(VST_r1f) != "F-H-Twn-6",]
+VST2_r2b <- VST_r2b[rownames(VST_r2b) != "J-Tri5-05-R2-B",]
+
+SbyE2_r1b <- SbyE_r1b[SbyE_r1b$Sample_ID != "B-J-T5-1-11",]
+SbyE2_r1f <- SbyE_r1f[SbyE_r1f$Sample_ID %nin% c("F-J-Twn-4", "F-H-Twn-6"),]
+SbyE2_r2b <- SbyE_r2b[SbyE_r2b$Sample_ID != "J-Tri5-05-R2-B",]
+
+#subset out potential outliers
+dist2_r1b <- as.dist(as.matrix(dist_r1b)[rownames(as.matrix(dist_r1b)) != "B-J-T5-1-11", 
+                                         colnames(as.matrix(dist_r1b)) != "B-J-T5-1-11"])
+dim(dist_r1b); dim(dist2_r1b)
+
+dist2_r1f <- as.dist(
+    as.matrix(dist_r1f)[rownames(as.matrix(dist_r1f)) != "F-J-Twn-4" & rownames(as.matrix(dist_r1f)) != "F-H-Twn-6", 
+                        colnames(as.matrix(dist_r1f)) != "F-J-Twn-4" & colnames(as.matrix(dist_r1f)) != "F-H-Twn-6"])
+dim(dist_r1f); dim(dist2_r1f)
+
+dist2_r2b <- as.dist(as.matrix(dist_r2b)[rownames(as.matrix(dist_r2b)) != "J-Tri5-05-R2-B", 
+                                         colnames(as.matrix(dist_r2b)) != "J-Tri5-05-R2-B"])
+dim(dist_r2b); dim(dist2_r2b)
+```
+
+
+```{r, echo = FALSE, results = 'hide', fig.height = 9, fig.width = 9}
+h1 <- ggplot(SbyE2_r1b, aes(x=Strain, y = Hdiv, fill = Strain)) +
+    facet_grid(.~Chamber.Rep) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(width = 0.2, height = 0.01, size = 1.1) +
+    scale_y_continuous("Bacterial H' Diversity", trans = "sqrt") +
+    scale_x_discrete("") + guides(fill = 'none') +
+    scale_fill_manual("", values = strain_col) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+h2 <- ggplot(SbyE2_r1f, aes(x=Strain, y = Hdiv, fill = Strain)) +
+    facet_grid(.~Chamber.Rep) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(width = 0.2, height = 0.01, size = 1.1) +
+    scale_y_continuous("Fungal H' Diversity", trans = "sqrt") +
+    scale_x_discrete("") + guides(fill = 'none') +
+    scale_fill_manual("", values = strain_col) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+h3 <- ggplot(SbyE2_r2b, aes(x=Strain, y = Hdiv, fill = Strain)) +
+    facet_grid(.~Chamber.Rep) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(width = 0.2, height = 0.01, size = 1.1) +
+    scale_y_continuous("Bacterial H' Diversity", trans = "sqrt") +
+    scale_x_discrete("") + guides(fill = 'none') +
+    scale_fill_manual("", values = strain_col) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+h4 <- ggplot(SbyE_r2f, aes(x=Strain, y = Hdiv, fill = Strain)) +
+    facet_grid(.~Chamber.Rep) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(width = 0.2, height = 0.01, size = 1.1) +
+    scale_y_continuous("Fungal H' Diversity", trans = "sqrt") +
+    scale_x_discrete("") + guides(fill = 'none') +
+    scale_fill_manual("", values = strain_col) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#tiff("./figures/Diversity_all.tiff", width=10, height=7, units="in", res=300)
+multiplot(h1, h2, h3, h4, cols = 2)
+#dev.off()
+
+```
+
+#### Combo Figure
+```{r, include = FALSE, fig.keep = 'none'}
+#tiff("./figures/Diversity_RelAbun_all.tiff", width=7, height=12, units="in", res=300)
+ggarrange(h1, plot_r1b+guides(fill='none'), 
+          h3, plot_r2b+guides(fill='none'), 
+          h2, plot_r1f+guides(fill='none'), 
+          h4, plot_r2f+guides(fill='none'),
+          ncol = 2, nrow = 4,
+          widths = c(.75, 1.5), heights = c(1,1,1,1),
+          labels = c("A)", "B)", "C)", "D)", "E)", "F)", "G)", "H)"), 
+          label.args = list(gp=gpar(font=2, fontsize=16), 
+                            x=unit(1,"line"), hjust=.5, vjust=1.5) )
+#dev.off()
+```
+
+
+# Structure
+* adonis2 and RRPP agree with one another, but RRPP output provides F-statistics and p-values for all model terms
+```{r}
+# r1b
+comm_r1b <- adonis2(VST2_r1b ~ Strain * Chamber.Rep,
+                    perm=199, method = "euclidean", data=SbyE2_r1b,
+                    binary = FALSE, by = "margin" )
+comm_r1b 
+rrpp_r1b <- lm.rrpp(dist2_r1b ~ Strain * Chamber.Rep, iter = 999,
+                    print.progress = FALSE, data = SbyE2_r1b, SS.type="III")
+anova(rrpp_r1b, effect.type = "F")
+
+
+# r1f
+comm_r1f <- adonis2(VST2_r1f ~ Strain * Chamber.Rep,
+                    perm=199, method = "euclidean", data=SbyE2_r1f,
+                    binary = FALSE, by = "margin" )
+comm_r1f 
+rrpp_r1f <- lm.rrpp(dist2_r1f ~ Strain * Chamber.Rep, iter = 999,
+                    print.progress = FALSE, data = SbyE2_r1f, SS.type="III")
+anova(rrpp_r1f, effect.type = "F")
+
+
+# r2b
+comm_r2b <- adonis2(VST2_r2b ~ Strain * Chamber.Rep,
+                    perm=199, method = "euclidean", data=SbyE2_r2b,
+                    binary = FALSE, by = "margin" )
+comm_r2b 
+rrpp_r2b <- lm.rrpp(dist2_r2b ~ Strain * Chamber.Rep, iter = 999,
+                    print.progress = FALSE, data = SbyE2_r2b, SS.type="III")
+anova(rrpp_r2b, effect.type = "F")
+
+
+# r2f
+comm_r2f <- adonis2(VST_r2f ~ Strain * Chamber.Rep,
+                    perm=199, method = "euclidean", data=SbyE_r2f,
+                    binary = FALSE, by = "margin" )
+comm_r2f 
+rrpp_r2f <- lm.rrpp(dist_r2f ~ Strain * Chamber.Rep, iter = 999,
+                    print.progress = FALSE, data = SbyE_r2f, SS.type="III")
+anova(rrpp_r2f, effect.type = "F")
+
+```
+
+### w/out Fusarium
+```{r}
+# r1f
+# **** Can't run this model, too many 0 read samples after removing ASV1 Fusarium
+
+# r2f
+comm_noFus_r2f <- adonis2(VST_noFus_r2f ~ Strain * Chamber.Rep,
+                    perm=199, method = "euclidean", data=SbyE_r2f,
+                    binary = FALSE, by = "margin" )
+comm_noFus_r2f 
+rrpp_noFus_r2f <- lm.rrpp(dist_noFus_r2f ~ Strain * Chamber.Rep, iter = 999,
+                    print.progress = FALSE, data = SbyE_r2f, SS.type="III")
+anova(rrpp_noFus_r2f, effect.type = "F")
+```
+
+## Avg dissimilarity b/w treatments
+```{r, results = 'hide'}
+group_r1b <- SbyE_r1b$Strain_Chamber[match(labels(dist_r1b), SbyE_r1b$Sample_ID)]
+meandist_r1b <- meandist(dist_r1b, grouping = group_r1b)
+#write.csv(meandist_r1b, "out.csv")
+#summary(meandist_r1b)
+disp_r1b <- betadisper(dist_r1b, group_r1b)
+permutest(disp_r1b)
+anova(disp_r1b)
+TukeyHSD(disp_r1b)
+
+group_r2b <- SbyE_r2b$Strain_Chamber[match(labels(dist_r2b), SbyE_r2b$Sample_ID)]
+meandist_r2b <- meandist(dist_r2b, grouping = group_r2b)
+#write.csv(meandist_r2b, "out2.csv")
+```
+
+
+## PCoA
+
+### Set up data
+```{r, include = FALSE}
+pcoa_r1b <- cmdscale(dist2_r1b, eig =TRUE)
+expl_r1b_1 <- round(pcoa_r1b$eig[1] / sum(pcoa_r1b$eig), 3) * 100; expl_r1b_1
+expl_r1b_2 <- round(pcoa_r1b$eig[2] / sum(pcoa_r1b$eig), 3) * 100; expl_r1b_2
+expl_r1b_3 <- round(pcoa_r1b$eig[3] / sum(pcoa_r1b$eig), 3) * 100; expl_r1b_3
+
+pcoa_r1f <- cmdscale(dist2_r1f, eig =TRUE)
+expl_r1f_1 <- round(pcoa_r1f$eig[1] / sum(pcoa_r1f$eig), 3) * 100; expl_r1f_1
+expl_r1f_2 <- round(pcoa_r1f$eig[2] / sum(pcoa_r1f$eig), 3) * 100; expl_r1f_2
+expl_r1f_3 <- round(pcoa_r1f$eig[3] / sum(pcoa_r1f$eig), 3) * 100; expl_r1f_3
+
+pcoa_r2b <- cmdscale(dist2_r2b, eig =TRUE)
+expl_r2b_1 <- round(pcoa_r2b$eig[1] / sum(pcoa_r2b$eig), 3) * 100; expl_r2b_1
+expl_r2b_2 <- round(pcoa_r2b$eig[2] / sum(pcoa_r2b$eig), 3) * 100; expl_r2b_2
+expl_r2b_3 <- round(pcoa_r2b$eig[3] / sum(pcoa_r2b$eig), 3) * 100; expl_r2b_3
+
+pcoa_r2f <- cmdscale(dist_r2f, eig =TRUE)
+expl_r2f_1 <- round(pcoa_r2f$eig[1] / sum(pcoa_r2f$eig), 3) * 100; expl_r2f_1
+expl_r2f_2 <- round(pcoa_r2f$eig[2] / sum(pcoa_r2f$eig), 3) * 100; expl_r2f_2
+expl_r2f_3 <- round(pcoa_r2f$eig[3] / sum(pcoa_r2f$eig), 3) * 100; expl_r2f_3
+
+```
+
+### Broken Stick Figure
+```{r, echo = FALSE, results = 'hide', fig.height=9, fig.width=9}
+#Note - scale Total Variance of eigenvalues to 1 in bstick; cmdscale does not by default
+b.stick_r1b <- bstick(length(pcoa_r1b$eig), tot.var = sum(pcoa_r1b$eig))
+bs1 <- ggplot() + geom_point(aes(x = seq(1,20,1), y=pcoa_r1b$eig[1:20]), size = 2) +
+    xlab('PCoA Axis') + ylab('Eigenvalue') +
+    geom_hline(aes(color= "Kaiser-Guttman", yintercept = mean(pcoa_r1b$eig)), linetype=2, linewidth=1.5) +
+    geom_line(aes(x= seq(1,20,1), y = b.stick_r1b[1:20], color = "Broken-Stick"), linetype=4, linewidth=1.5) +
+    scale_color_manual(name = "Criterion", breaks = c("Kaiser-Guttman", "Broken-Stick"), values = c("Kaiser-Guttman"="blue", "Broken-Stick"="red")) +
+    theme(legend.position = 'inside', legend.position.inside = c(.7,.8)) +
+    ggtitle("R1 Bacteria")
+
+b.stick_r1f <- bstick(length(pcoa_r1f$eig), tot.var = sum(pcoa_r1f$eig))
+bs2 <- ggplot() + geom_point(aes(x = seq(1,20,1), y=pcoa_r1f$eig[1:20]), size = 2) +
+    xlab('PCoA Axis') + ylab('Eigenvalue') +
+    geom_hline(aes(color= "Kaiser-Guttman", yintercept = mean(pcoa_r1f$eig)), linetype=2, linewidth=1.5) +
+    geom_line(aes(x= seq(1,20,1), y = b.stick_r1f[1:20], color = "Broken-Stick"), linetype=4, linewidth=1.5) +
+    scale_color_manual(name = "Criterion", breaks = c("Kaiser-Guttman", "Broken-Stick"), values = c("Kaiser-Guttman"="blue", "Broken-Stick"="red")) +
+    theme(legend.position = 'inside', legend.position.inside = c(.7,.8)) +
+    ggtitle("R1 Fungi")
+
+b.stick_r2b <- bstick(length(pcoa_r2b$eig), tot.var = sum(pcoa_r2b$eig))
+bs3 <- ggplot() + geom_point(aes(x = seq(1,20,1), y=pcoa_r2b$eig[1:20]), size = 2) +
+    xlab('PCoA Axis') + ylab('Eigenvalue') +
+    geom_hline(aes(color= "Kaiser-Guttman", yintercept = mean(pcoa_r2b$eig)), linetype=2, linewidth=1.5) +
+    geom_line(aes(x= seq(1,20,1), y = b.stick_r2b[1:20], color = "Broken-Stick"), linetype=4, linewidth=1.5) +
+    scale_color_manual(name = "Criterion", breaks = c("Kaiser-Guttman", "Broken-Stick"), values = c("Kaiser-Guttman"="blue", "Broken-Stick"="red")) +
+    theme(legend.position = 'inside', legend.position.inside = c(.7,.8)) +
+    ggtitle("R2 Bacteria")
+
+b.stick_r2f <- bstick(length(pcoa_r2f$eig), tot.var = sum(pcoa_r2f$eig))
+bs4 <- ggplot() + geom_point(aes(x = seq(1,20,1), y=pcoa_r2f$eig[1:20]), size = 2) +
+    xlab('PCoA Axis') + ylab('Eigenvalue') +
+    geom_hline(aes(color= "Kaiser-Guttman", yintercept = mean(pcoa_r2f$eig)), linetype=2, linewidth=1.5) +
+    geom_line(aes(x= seq(1,20,1), y = b.stick_r2f[1:20], color = "Broken-Stick"), linetype=4, linewidth=1.5) +
+    scale_color_manual(name = "Criterion", breaks = c("Kaiser-Guttman", "Broken-Stick"), values = c("Kaiser-Guttman"="blue", "Broken-Stick"="red")) +
+    theme(legend.position = 'inside', legend.position.inside = c(.7,.8)) +
+    ggtitle("R2 Fungi")
+
+multiplot(bs1, bs2, bs3, bs4, cols = 2)
+
+```
+
+
+```{r, include = FALSE}
+# create df for use in plots & merge w/ SbyE df
+scores_r1b <- as.data.frame(pcoa_r1b$points)
+scores_r1b$ids <- rownames(scores_r1b) 
+pdat_r1b <- merge(scores_r1b, SbyE_r1b, by.x="ids", by.y="Sample_ID")
+rownames(pdat_r1b) <- as.character(pdat_r1b$ids)
+pdat_r1b$StrainChamber <- as.factor(paste(pdat_r1b$Strain, pdat_r1b$Chamber.Rep, sep = "_"))
+
+scores_r1f <- as.data.frame(pcoa_r1f$points)
+scores_r1f$ids <- rownames(scores_r1f) 
+pdat_r1f <- merge(scores_r1f, SbyE_r1f, by.x="ids", by.y="Sample_ID")
+rownames(pdat_r1f) <- as.character(pdat_r1f$ids)
+pdat_r1f$StrainChamber <- as.factor(paste(pdat_r1f$Strain, pdat_r1f$Chamber.Rep, sep = "_"))
+
+scores_r2b <- as.data.frame(pcoa_r2b$points)
+scores_r2b$ids <- rownames(scores_r2b) 
+pdat_r2b <- merge(scores_r2b, SbyE_r2b, by.x="ids", by.y="Sample_ID")
+rownames(pdat_r2b) <- as.character(pdat_r2b$ids)
+pdat_r2b$StrainChamber <- as.factor(paste(pdat_r2b$Strain, pdat_r2b$Chamber.Rep, sep = "_"))
+
+scores_r2f <- as.data.frame(pcoa_r2f$points)
+scores_r2f$ids <- rownames(scores_r2f) 
+pdat_r2f <- merge(scores_r2f, SbyE_r2f, by.x="ids", by.y="Sample_ID")
+rownames(pdat_r2f) <- as.character(pdat_r2f$ids)
+pdat_r2f$StrainChamber <- as.factor(paste(pdat_r2f$Strain, pdat_r2f$Chamber.Rep, sep = "_"))
+
+```
+
+```{r, include = FALSE}
+#create a standard error ellipse
+#set up a data frame before running the function.
+#loop, 
+#change pdat$____ to your var name, and same for =g at end
+#change name of ellipses.___ to name of dataframe above
+
+### StrainChamber 
+# r1b
+ell_SxC_r1b <- data.frame() 
+for(g in levels(pdat_r1b$StrainChamber )){ 
+  ell_SxC_r1b <- rbind(ell_SxC_r1b, cbind(as.data.frame(with(
+    pdat_r1b[pdat_r1b$StrainChamber ==g,],  
+    veganCovEllipse(cov.wt(cbind(V1, V2),
+         wt=rep(1/length(V1),length(V1)))$cov, 
+         center=c(mean(V1), mean(V2)))   )) , StrainChamber =g))   } 
+ell_SxC_r1b$Chamber.Rep <- as.factor(sapply(ell_SxC_r1b$StrainChamber, function(x) strsplit(x ,"_")[[1]][2]))
+ell_SxC_r1b$Strain <- as.factor(sapply(ell_SxC_r1b$StrainChamber, function(x) strsplit(x ,"_")[[1]][1]))
+
+# r1f 
+ell_SxC_r1f <- data.frame() 
+for(g in levels(pdat_r1f$StrainChamber )){ 
+  ell_SxC_r1f <- rbind(ell_SxC_r1f, cbind(as.data.frame(with(
+    pdat_r1f[pdat_r1f$StrainChamber ==g,],  
+    veganCovEllipse(cov.wt(cbind(V1, V2),
+         wt=rep(1/length(V1),length(V1)))$cov, 
+         center=c(mean(V1), mean(V2)))   )) , StrainChamber =g))   } 
+ell_SxC_r1f$Chamber.Rep <- as.factor(sapply(ell_SxC_r1f$StrainChamber, function(x) strsplit(x ,"_")[[1]][2]))
+ell_SxC_r1f$Strain <- as.factor(sapply(ell_SxC_r1f$StrainChamber, function(x) strsplit(x ,"_")[[1]][1]))
+
+# r2b 
+ell_SxC_r2b <- data.frame() 
+for(g in levels(pdat_r2b$StrainChamber )){ 
+  ell_SxC_r2b <- rbind(ell_SxC_r2b, cbind(as.data.frame(with(
+    pdat_r2b[pdat_r2b$StrainChamber ==g,],  
+    veganCovEllipse(cov.wt(cbind(V1, V2),
+         wt=rep(1/length(V1),length(V1)))$cov, 
+         center=c(mean(V1), mean(V2)))   )) , StrainChamber =g))   } 
+ell_SxC_r2b$Chamber.Rep <- as.factor(sapply(ell_SxC_r2b$StrainChamber, function(x) strsplit(x ,"_")[[1]][2]))
+ell_SxC_r2b$Strain <- as.factor(sapply(ell_SxC_r2b$StrainChamber, function(x) strsplit(x ,"_")[[1]][1]))
+
+# r2f 
+ell_SxC_r2f <- data.frame() 
+for(g in levels(pdat_r2f$StrainChamber )){ 
+  ell_SxC_r2f <- rbind(ell_SxC_r2f, cbind(as.data.frame(with(
+    pdat_r2f[pdat_r2f$StrainChamber ==g,],  
+    veganCovEllipse(cov.wt(cbind(V1, V2),
+         wt=rep(1/length(V1),length(V1)))$cov, 
+         center=c(mean(V1), mean(V2)))   )) , StrainChamber =g))   } 
+ell_SxC_r2f$Chamber.Rep <- as.factor(sapply(ell_SxC_r2f$StrainChamber, function(x) strsplit(x ,"_")[[1]][2]))
+ell_SxC_r2f$Strain <- as.factor(sapply(ell_SxC_r2f$StrainChamber, function(x) strsplit(x ,"_")[[1]][1]))
+
+# #Chamber 
+# ell_Chamber_r1b <- data.frame() 
+# for(g in levels(pdat_r1b$Chamber.Rep )){ 
+#   ell_Chamber_r1b <- rbind(ell_Chamber_r1b, cbind(as.data.frame(with(
+#     pdat_r1b[pdat_r1b$Chamber.Rep ==g,],  
+#     veganCovEllipse(cov.wt(cbind(V1, V2),
+#          wt=rep(1/length(V1),length(V1)))$cov, 
+#          center=c(mean(V1), mean(V2)))   )) , Chamber.Rep =g))   } 
+
+```
+
+### Figure
+```{r, echo = FALSE, results = 'hide', fig.height=9, fig.width=9}
+pc1 <- ggplot() + #coord_equal() + 
+    geom_path(data = ell_SxC_r1b, aes(x = V1, y = V2,
+          group = StrainChamber, colour = Strain, linetype = Chamber.Rep), linewidth = 1.1,
+          show.legend = TRUE) +
+    geom_point(data = pdat_r1b, aes(x = V1, y = V2, 
+          color = Strain, shape = Chamber.Rep) , size = 2) +
+    scale_colour_manual("Strain", values = c(brewer.pal(3, name = "Dark2")) ) +
+    scale_linetype_manual("Chamber", values = c(1,2)) +
+    scale_shape_manual("Chamber", values = c(16,15)) +
+    scale_x_continuous(paste("PCoA 1 (", expl_r1b_1, "%)", sep = "")) +
+    scale_y_continuous(paste("PCoA 2 (", expl_r1b_2, "%)", sep = "")) +
+    theme(legend.position = 'none' ) +
+    ggtitle("A) R1 Bacteria")
+
+pc2 <- ggplot() + #coord_equal() + 
+    geom_path(data = ell_SxC_r1f, aes(x = V1, y = V2,
+          group = StrainChamber, colour = Strain, linetype = Chamber.Rep), linewidth = 1.1,
+          show.legend = TRUE) +
+    geom_point(data = pdat_r1f, aes(x = V1, y = V2, 
+          color = Strain, shape = Chamber.Rep) , size = 2) +
+    scale_colour_manual("Strain", values = c(brewer.pal(3, name = "Dark2")) ) +
+    scale_linetype_manual("Chamber", values = c(1,2)) +
+    scale_shape_manual("Chamber", values = c(16,15)) +
+    scale_x_continuous(paste("PCoA 1 (", expl_r1f_1, "%)", sep = "")) +
+    scale_y_continuous(paste("PCoA 2 (", expl_r1f_2, "%)", sep = ""))  +
+    theme(legend.position = 'none' ) +
+    ggtitle("C) R1 Fungi")
+
+pc3 <- ggplot() + #coord_equal() + 
+    geom_path(data = ell_SxC_r2b, aes(x = V1, y = V2,
+          group = StrainChamber, colour = Strain, linetype = Chamber.Rep), linewidth = 1.1,
+          show.legend = TRUE) +
+    geom_point(data = pdat_r2b, aes(x = V1, y = V2, 
+          color = Strain, shape = Chamber.Rep) , size = 2) +
+    scale_colour_manual("Strain", values = c(brewer.pal(3, name = "Dark2")) ) +
+    scale_linetype_manual("Chamber", values = c(1,2)) +
+    scale_shape_manual("Chamber", values = c(16,15)) +
+    scale_x_continuous(paste("PCoA 1 (", expl_r2b_1, "%)", sep = "")) +
+    scale_y_continuous(paste("PCoA 2 (", expl_r2b_2, "%)", sep = "")) +
+    theme(legend.position = 'none' ) +
+    ggtitle("B) R2 Bacteria")
+
+pc4 <- ggplot() + #coord_equal() + 
+    geom_path(data = ell_SxC_r2f, aes(x = V1, y = V2,
+          group = StrainChamber, colour = Strain, linetype = Chamber.Rep), linewidth = 1.1,
+          show.legend = TRUE) +
+    geom_point(data = pdat_r2f, aes(x = V1, y = V2, 
+          color = Strain, shape = Chamber.Rep) , size = 2) +
+    scale_colour_manual("Strain", values = c(brewer.pal(3, name = "Dark2")) ) +
+    scale_linetype_manual("Chamber", values = c(1,2)) +
+    scale_shape_manual("Chamber", values = c(16,15)) +
+    scale_x_continuous(paste("PCoA 1 (", expl_r2f_1, "%)", sep = "")) +
+    scale_y_continuous(paste("PCoA 2 (", expl_r2f_2, "%)", sep = "")) +
+    #theme(legend.position = 'none' ) +
+    theme(legend.position = 'inside', legend.position.inside = c(.85,.75), 
+          legend.key.width = unit(1, "cm"), legend.spacing.y = unit(0, "cm"),
+          legend.key.spacing.y = unit(0, "cm")) +
+    ggtitle("D) R2 Fungi")
+
+#tiff("./figures/PCoA_Strain x Chamber_all.tiff", width=10, height=10, units="in", res=300)
+multiplot(pc1, pc3, pc2, pc4, cols = 2)
+#dev.off()
+
+```
+
+### Figure w/out Fusarium
+```{r, echo = FALSE, results = 'hide', fig.height=4, fig.width=4}
+pcoa_noFus_r2f <- cmdscale(dist_noFus_r2f, eig =TRUE)
+
+expl_noFus_r2f_1 <- round(pcoa_noFus_r2f$eig[1] / sum(pcoa_noFus_r2f$eig), 3) * 100; expl_noFus_r2f_1
+expl_noFus_r2f_2 <- round(pcoa_noFus_r2f$eig[2] / sum(pcoa_noFus_r2f$eig), 3) * 100; expl_noFus_r2f_2
+expl_noFus_r2f_3 <- round(pcoa_noFus_r2f$eig[3] / sum(pcoa_noFus_r2f$eig), 3) * 100; expl_noFus_r2f_3
+
+b.stick_noFus_r2f <- bstick(length(pcoa_noFus_r2f$eig), tot.var = sum(pcoa_noFus_r2f$eig))
+bs4_noFus <- ggplot() + geom_point(aes(x = seq(1,20,1), y=pcoa_noFus_r2f$eig[1:20]), size = 2) +
+    xlab('PCoA Axis') + ylab('Eigenvalue') +
+    geom_hline(aes(color= "Kaiser-Guttman", yintercept = mean(pcoa_noFus_r2f$eig)), linetype=2, linewidth=1.5) +
+    geom_line(aes(x= seq(1,20,1), y = b.stick_noFus_r2f[1:20], color = "Broken-Stick"), linetype=4, linewidth=1.5) +
+    scale_color_manual(name = "Criterion", breaks = c("Kaiser-Guttman", "Broken-Stick"), values = c("Kaiser-Guttman"="blue", "Broken-Stick"="red")) +
+    theme(legend.position = 'inside', legend.position.inside = c(.7,.8)) +
+    ggtitle("R2 Fungi _noFus")
+bs4_noFus # only 2 axes signif
+
+scores_noFus_r2f <- as.data.frame(pcoa_noFus_r2f$points)
+scores_noFus_r2f$ids <- rownames(scores_noFus_r2f) 
+pdat_noFus_r2f <- merge(scores_noFus_r2f, SbyE_r2f, by.x="ids", by.y="Sample_ID")
+rownames(pdat_noFus_r2f) <- as.character(pdat_noFus_r2f$ids)
+pdat_noFus_r2f$StrainChamber <- as.factor(paste(pdat_noFus_r2f$Strain, pdat_noFus_r2f$Chamber.Rep, sep = "_"))
+
+# r2f 
+ell_noFus_SxC_r2f <- data.frame() 
+for(g in levels(pdat_noFus_r2f$StrainChamber )){ 
+  ell_noFus_SxC_r2f <- rbind(ell_noFus_SxC_r2f, cbind(as.data.frame(with(
+    pdat_noFus_r2f[pdat_noFus_r2f$StrainChamber ==g,],  
+    veganCovEllipse(cov.wt(cbind(V1, V2),
+         wt=rep(1/length(V1),length(V1)))$cov, 
+         center=c(mean(V1), mean(V2)))   )) , StrainChamber =g))   } 
+ell_noFus_SxC_r2f$Chamber.Rep <- as.factor(sapply(ell_noFus_SxC_r2f$StrainChamber, function(x) strsplit(x ,"_")[[1]][2]))
+ell_noFus_SxC_r2f$Strain <- as.factor(sapply(ell_noFus_SxC_r2f$StrainChamber, function(x) strsplit(x ,"_")[[1]][1]))
+
+pc4_noFus <- ggplot() + #coord_equal() + 
+    geom_path(data = ell_noFus_SxC_r2f, aes(x = V1, y = V2,
+          group = StrainChamber, colour = Strain, linetype = Chamber.Rep), linewidth = 1.1,
+          show.legend = TRUE) +
+    geom_point(data = pdat_noFus_r2f, aes(x = V1, y = V2, 
+          color = Strain, shape = Chamber.Rep) , size = 2) +
+    scale_colour_manual("Strain", values = c(brewer.pal(3, name = "Dark2")) ) +
+    scale_linetype_manual("Chamber", values = c(1,2)) +
+    scale_shape_manual("Chamber", values = c(16,15)) +
+    scale_x_continuous(paste("PCoA 1 (", expl_noFus_r2f_1, "%)", sep = "")) +
+    scale_y_continuous(paste("PCoA 2 (", expl_noFus_r2f_2, "%)", sep = "")) +
+    theme(legend.position = 'inside', legend.position.inside = c(.85,.8), 
+          legend.key.width = unit(1, "cm"), legend.spacing.y = unit(0, "cm"),
+          legend.key.spacing.y = unit(0, "cm")) +
+    ggtitle("R2 Fungi - no Fus.")
+pc4_noFus
+
+```
+
+### Unusual Pattern in R2-Fungi PCoA
+```{r, fig.height=4, fig.width=4}
+#pcoa_noFus_r2f
+
+# calculate relative abundance of each species wi/in sites
+REL_noFus_r2f <- VST_noFus_r2f #where fish is species mat w/ sites as rows
+for(i in 1:nrow(VST_noFus_r2f)) {
+    REL_noFus_r2f[i, ] = VST_noFus_r2f[i, ] / sum(VST_noFus_r2f[i, ]) 
+    }
+#calculate the species-scores/explanatory-vectors using results of the whole PCoA
+pcoa_noFus_r2f <- add.spec.scores(pcoa_noFus_r2f, REL_noFus_r2f, method = "pcoa.scores")
+
+
+#define the 'important' species based on a threshold
+corr_noFus_r2f <- add.spec.scores(pcoa_noFus_r2f, REL_noFus_r2f, method = "cor.scores")$cproj 
+
+#save only the important species 
+corrcut <- 0.7 # define a correlational cutoff
+imp_noFus_r2f <- 
+    corr_noFus_r2f[abs(corr_noFus_r2f[, 1]) >= corrcut | abs(corr_noFus_r2f[, 2]) >= corrcut, ] 
+#imp_noFus_r2f
+imp_nam_noFus_r2f <- rownames(imp_noFus_r2f)
+ps_r2f@tax_table[imp_nam_noFus_r2f,c('phylum','genus')]
+pcoa_noFus_r2f$cproj[imp_nam_noFus_r2f, ]*10000
+
+test <- data.frame(corr_noFus_r2f[imp_nam_noFus_r2f, ])
+test$ids <- rownames(test)
+
+pc4_specScores <- ggplot() + #coord_equal() + 
+    geom_path(data = ell_noFus_SxC_r2f, aes(x = V1, y = V2,
+          group = StrainChamber, colour = Strain, linetype = Chamber.Rep), linewidth = 1.1,
+          show.legend = TRUE) +
+    geom_point(data = pdat_noFus_r2f, aes(x = V1, y = V2, 
+          color = Strain, shape = Chamber.Rep) , size = 2) +
+    geom_text(data = test, 
+               aes(x = Dim1*10, y = Dim2*10, label = ids), size =3)+
+    scale_color_manual(values = c(brewer.pal(3, name = "Dark2"))) +
+    scale_linetype_manual("Chamber", values = c(1,2)) +
+    scale_shape_manual("Chamber", values = c(16,15))
+
+#tiff("./figures/PCoA_r2f_specScores.tiff", width=6, height=5, units="in", res=300)
+pc4_specScores
+#dev.off()
+```
+
+* of the taxa significantly correlated with an axes, both ASV6 and ASV141 fall closer to the odd points along V1 axis and have a distinctive patterns of either 0 or high rel. abundance in half the samples pretty evenly split across treatments (not shown, box plots of relative abundance)
+
+# Disease Models
+```{r, results = 'hide', echo =  FALSE, fig.width = 6, fig.height = 6}
+SbyE_r1b %>% 
+    dplyr::select(Strain, Chamber.Rep, Strain_Chamber, FgTa_ratio, ugDON_per_g) %>% 
+    mutate("Round" = "R1") -> out1
+SbyE_r2b %>% 
+    dplyr::select(Strain, Chamber.Rep, Strain_Chamber, FgTa_ratio, ugDON_per_g) %>% 
+    mutate("Round" = "R2") %>% rbind(., out1) -> dat
+dat %>% pivot_longer(cols = c(FgTa_ratio, ugDON_per_g)) -> dat2
+
+dis_plot <- ggplot(dat2, aes(x = Chamber.Rep, y = value, color = Strain, group = Strain_Chamber)) +
+    facet_grid(name ~ Round, scales = "free_y") +
+    geom_boxplot(outlier.shape = NA) +
+    geom_point(position = position_jitterdodge(jitter.width = 0.15)) +
+    scale_color_manual("Strain", values = strain_col) +
+    scale_x_discrete('Chamber') + scale_y_continuous("") +
+    theme(legend.position = 'inside', legend.position.inside = c(0.1, 0.88), 
+          legend.background = element_blank())
+
+#tiff("./figures/Disease_figure.tiff", width=6, height=5.5, units="in", res=300)
+dis_plot
+#dev.off()
+```
+
+```{r}
+#hist(log(dat$ugDON_per_g), breaks = 10)
+#hist(log(dat$FgTa_ratio), breaks = 10)
+par(mfrow = c(2,2))
+fgr <- lm(log(FgTa_ratio+0.5) ~ Strain*Chamber.Rep*Round, data = dat[dat$Strain != "Cont",])
+#plot(fgr)  #H-PH1-06-R2 is an outlier
+Anova(fgr, type = 3)
+
+don <- lm(log(ugDON_per_g+1) ~ Chamber.Rep*Round, data = dat[dat$Strain == "PH1",])
+#plot(don)  #H-PH1-06-R2 is an outlier here also
+Anova(don, type = 3)
+
+#SbyE_r2b[SbyE_r2b$Sample_ID == "H-PH1-06-R2-B",] 
+
+```
+* disease models - NOTE - "H-PH1-06-R2-B is an outlier in both, and has lowest DON and FgTa by a lot, but does not match the diversity model outliers & no big incentive to remove
+
+
+
+```{r session}
+sessionInfo()
+```
+
+
+
+##### end
