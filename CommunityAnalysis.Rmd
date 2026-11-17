@@ -237,7 +237,6 @@ sum(topten_r2f/depth_r2f)
 
 ```
 
-* The proportion of all read counts that the top 10 taxa in each round-kingdom contain indicates a highly biased community, with unequal colonization.
 
 # Venn Diagram
 ```{r, echo = FALSE, results = 'hide', fig.height = 4, fig.width = 6}
@@ -333,12 +332,7 @@ multiplot(vd_b_chambers, vd_f_chambers, cols = 1)
 
 ```
 
-* Only 16 Bacteria shared in common across all 4 Round-Chamber combinations, and only 5 Fungi.
-* stronger overlap between chambers within Rounds, then between rounds
-
-
 # Relative Abundance Plots
-* *NOTE* - for right now, make sure to look at ASV names, not colors alone. Palettes do not line up across replicate experiments and kingdoms
 ```{r, echo = FALSE, results = 'hide', fig.height = 5, fig.width = 9}
 # make an ASV color variable, with gray for 'other'
 #asv_color <- c("#0D0887FF", "#47039FFF", "#7301A8FF", "#9C179EFF", "#BD3786FF", "#D8576BFF", "#ED7953FF", "#FA9E3BFF", "#FDC926FF", "#F0F921FF", "#696969")
@@ -423,9 +417,6 @@ multiplot(plot_r1b, plot_r1f, plot_r2b, plot_r2f, cols = 2)
 #dev.off()
 
 ```
-* Fungi - clear dominance of Fusarium in Fusarium treaetments in both rounds. Highest distribution of diversity in the control treatments. But otherwise, more similarities between Fusarium treatments (PH1 and Tri5 mutant) and betweeen chambers, then is seen for bacteria overall.
-* Bacteria - Dominance of ASV1-Erwiniaceae in Round 1 as well as in several chambers in Round 2. in Round 1 - moderate differences between chambers and between treatments. Stronger chamber and treatment differences in Round 2, with less cohernence in what is actually going on.
-
 
 # Alpha Diversity
 * post-filtering diversity
@@ -474,22 +465,20 @@ summary(div_r1b_a)$adj.r.squared
 
 
 div_r1f <- lm(log(Hdiv+0.01) ~ Strain * Chamber.Rep, 
-              data = SbyE_r1f[SbyE_r1f$Sample_ID != "F-J-Twn-4" &   #has 0 for hdiv
-                              SbyE_r1f$Sample_ID != "F-H-Twn-6" ,]) #lowest hdiv in its group by a lot
+              data = SbyE_r1f[SbyE_r1f$Sample_ID != "F-J-Twn-4" &   #outlier
+                              SbyE_r1f$Sample_ID != "F-H-Twn-6" ,]) #outlier
 #plot(div_r1f)           #when those 2 samples are removed, this is ok
 Anova(div_r1f, type = 3) #strain signif
 summary(div_r1f)$adj.r.squared
 div_r1f_a <- lm(I(Hdiv+0.01) ~ Strain * Chamber.Rep, 
-              data = SbyE_r1f[SbyE_r1f$Sample_ID != "F-J-Twn-4" &   #has 0 for hdiv
+              data = SbyE_r1f[SbyE_r1f$Sample_ID != "F-J-Twn-4" &   #outlier
                               SbyE_r1f$Sample_ID != "F-H-Twn-6" ,])
-#car::boxCox(div_r1f_a, lambda = seq(-0.5, 0.5, 0.1))  #really close to 0, 
-                                  # so log is the best transformation
+#car::boxCox(div_r1f_a, lambda = seq(-0.5, 0.5, 0.1))  #really close to 0, best = log 
 
 
 div_r2b <- lm((Hdiv) ~ Strain * Chamber.Rep,
               data = SbyE_r2b[SbyE_r2b$Sample_ID !="J-Tri5-05-R2-B",])
 #plot(div_r2b)           #when sqrt is ok/good -
-                        #NOTE -different outlier than richness models
 #car::boxCox(div_r2b, lambda = seq(0, 1, 0.1))  # about 0.5
 div_r2b_a <- lm(I(((Hdiv^0.5)-1)/0.5) ~ Strain * Chamber.Rep, 
               data = SbyE_r2b[SbyE_r2b$Sample_ID !="J-Tri5-05-R2-B",])
@@ -506,7 +495,6 @@ div_r2f_a <- lm(I(((Hdiv^0.4)-1)/0.4) ~ Strain * Chamber.Rep, data = SbyE_r2f)
 #plot(div_r2f_a)           #bad, but maybe slightly better than reg. transformations
 Anova(div_r2f_a, type = 3)  # but again, signif strain makes sense w/ figure
 summary(div_r2f_a)$adj.r.squared
-
 
 # note, for r2f, 3 samples driving outliers in residuals figures, all from J-Tri5 treatment, but no good reason to remove them, and they are in the range with chamber H and the PH1 treatment. Unlike with r1f where the two outliers were clearly very distinctive within their respective chambers
 ```
@@ -526,7 +514,6 @@ div_r2f_aov <- aov(I(((Hdiv^0.4)-1)/0.4) ~ Strain * Chamber.Rep, data = SbyE_r2f
 # Fungi - only test Strain main effect
 TukeyHSD(div_r1f_aov, which = "Strain")
 TukeyHSD(div_r2f_aov, which = "Strain")
-# clear result - fungal diversity in control treatments consistently higher
 
 # Bacteria
 TukeyHSD(div_r1b_aov, which = "Strain") #ph1 higher div than tri5 or cont
@@ -539,15 +526,11 @@ TukeyHSD(div_r1b_aov, which = "Strain:Chamber.Rep")
 TukeyHSD(div_r2b_aov, which = "Strain:Chamber.Rep")
 
 ```
-* fungal result clear -- fungal diversity in control treatments consistently higher
-* bacterial results more muddled
 
 
 ### Figures
 ```{r, include = FALSE}
-# removing same outliers as in Shannon diversity analysis does not change any of the final p-values here, nor the PCoA figure interpretation.
-
-#subset out potential outliers
+#subset out same outliers
 VST2_r1b <- VST_r1b[rownames(VST_r1b) != "B-J-T5-1-11",]
 VST2_r1f <- VST_r1f[rownames(VST_r1f) != "F-J-Twn-4" & rownames(VST_r1f) != "F-H-Twn-6",]
 VST2_r2b <- VST_r2b[rownames(VST_r2b) != "J-Tri5-05-R2-B",]
@@ -686,23 +669,6 @@ rrpp_noFus_r2f <- lm.rrpp(dist_noFus_r2f ~ Strain * Chamber.Rep, iter = 999,
                     print.progress = FALSE, data = SbyE_r2f, SS.type="III")
 anova(rrpp_noFus_r2f, effect.type = "F")
 ```
-
-## Avg dissimilarity b/w treatments
-```{r, results = 'hide'}
-group_r1b <- SbyE_r1b$Strain_Chamber[match(labels(dist_r1b), SbyE_r1b$Sample_ID)]
-meandist_r1b <- meandist(dist_r1b, grouping = group_r1b)
-#write.csv(meandist_r1b, "out.csv")
-#summary(meandist_r1b)
-disp_r1b <- betadisper(dist_r1b, group_r1b)
-permutest(disp_r1b)
-anova(disp_r1b)
-TukeyHSD(disp_r1b)
-
-group_r2b <- SbyE_r2b$Strain_Chamber[match(labels(dist_r2b), SbyE_r2b$Sample_ID)]
-meandist_r2b <- meandist(dist_r2b, grouping = group_r2b)
-#write.csv(meandist_r2b, "out2.csv")
-```
-
 
 ## PCoA
 
@@ -1031,7 +997,7 @@ pc4_specScores
 #dev.off()
 ```
 
-* of the taxa significantly correlated with an axes, both ASV6 and ASV141 fall closer to the odd points along V1 axis and have a distinctive patterns of either 0 or high rel. abundance in half the samples pretty evenly split across treatments (not shown, box plots of relative abundance)
+* of the taxa significantly correlated with an axes, both ASV6 and ASV141 fall closer to the odd points along V1 axis and have a distinctive patterns of either 0 or high rel. abundance in half the samples pretty evenly split across treatments (box plots)
 
 # Disease Models
 ```{r, results = 'hide', echo =  FALSE, fig.width = 6, fig.height = 6}
@@ -1072,7 +1038,7 @@ Anova(don, type = 3)
 #SbyE_r2b[SbyE_r2b$Sample_ID == "H-PH1-06-R2-B",] 
 
 ```
-* disease models - NOTE - "H-PH1-06-R2-B is an outlier in both, and has lowest DON and FgTa by a lot, but does not match the diversity model outliers & no big incentive to remove
+* disease models - NOTE - "H-PH1-06-R2-B is an outlier in both, and has lowest DON and FgTa by a lot, but does not match the diversity model outliers & no incentive to remove
 
 
 
