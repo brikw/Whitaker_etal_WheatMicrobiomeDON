@@ -1,7 +1,7 @@
 # "Differential responses of the wheat microbiome to Fusarium graminearum and its virulence factor Deoxynivalenol"
 ### Whitaker, B.K., Rhoades, N., McCormick, S.P., Hao, G.
 
-**zenodo doi**
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24324505.svg)](https://doi.org/10.5281/zenodo.24324505)
 
 This repository includes the R code, data files, and small scripts to supplement the manuscript by Whitaker et al. "Differential responses of the wheat microbiome to Fusarium graminearum and its virulence factor Deoxynivalenol".
 
