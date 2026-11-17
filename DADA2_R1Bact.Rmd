@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE, fig.width=3.5, fig.height=3,
 * Run using `r version[['version.string']] `.
 
 # Objective
-This document reports on the **bacterial bioinformatics analysis** of the R1 experiment performed in the Fall of 2023 (completed Dec 2023). Data represents the output of Miseq sequencing run of the Tri5 Mutant Microbiome project (Guixia Hao & Briana K. Whitaker). 
+This document reports on the **bacterial bioinformatics analysis** of the R1 experiment performed in the Fall of 2023 (completed Dec 2023). Data represents the output of Miseq sequencing run of the Tri5 Mutant Microbiome project. 
 
 
 # 0) Load Packages, set path to data
@@ -83,9 +83,6 @@ SeqsOrig.df <- read.csv("./intermediate/R1Bact_TrackSequences_PriorFiltering.csv
                         row.names = 1)
 ```
 
-* Really high contamination in PCR1 (like 86,545 reads), but only 1 read in PCR2
-
-
 # 1) Initial Filter Step
 ```{r initFilt, results='hide'}
 # filter out reads with ambiguous bases (N) only
@@ -139,14 +136,12 @@ rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs[[5]]),
 # FWD.ReverseReads    1901       1900    1899   68092
 # REV.ForwardReads    1952       1956    1955  111833
 # REV.ReverseReads  118474       1901    1903    1901
-
-# note, no changes for this first identificatoin if filter maxN=0 done first
 ```
 
 
 ### Remove Primers
 ```{r cutadaptSetup, results='hide', echo=FALSE}
-cutadapt <- "C:/Users/Briana.Whitaker/AppData/Roaming/Python/Python310/Scripts/cutadapt.exe" #change to location on your machine
+cutadapt <- "C:/path/to/cutadapt.exe" #change to location on your machine
 system2(cutadapt, args = "--version") #v.4.0
 
 path.cut <- file.path(path, "cutadapt-")
@@ -182,14 +177,11 @@ rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[5]]),
 # FWD.ForwardReads       0          0       0       0
 # FWD.ReverseReads       1          0       0       0
 # REV.ForwardReads       0          0       0       0
-# REV.ReverseReads       0          0       0       0     #way fewer residual primers after doing pre-filter step
-
+# REV.ReverseReads       0          0       0       0    
 
 #get filenames of cutadapt-ed files
 cutFs <- sort(list.files(path.cut, pattern = "L001_R1_001.fastq.gz", full.names = TRUE))
 cutRs <- sort(list.files(path.cut, pattern = "L001_R2_001.fastq.gz", full.names = TRUE))
-
-#Sample.ID
 ```
 
 
@@ -236,7 +228,6 @@ out
 ```
 
 * Looks like about 25% of reads are being lost.
-* Despite VERY high read count in PCR1 at start, the filtering processes reduced read count to only 2 reads
 
 ```{r writeout, results='hide', echo=FALSE}
 #write.csv(out, "./intermediate/R1Bact-FilteringStep.csv")
@@ -421,12 +412,6 @@ hist(track$postChimera)
 
 ```
 
-* Lost a decent amount at the first pre-filter step, but otherwise fairly good retention of reads. 
-* Slightly higher chimeras than I would have expected, but not atrocious (highest ~5% lost)
-* PCR1 Blank is bizarre. ~86K reads at the start, but only 3K left after first filter, than only 2 reads left after 2nd filter.
-* UPDATE - PCR1Blank - 1000s of strings of exactly 35 N's as the sequence
-
-
 
 # 8) Create ps object
 
@@ -472,90 +457,6 @@ ps
 ```
 
 * Number of unique ASVs: `r length(getUniques(seqtab.nochim))`
-
-
-```{r}
-totReads_b <- sum(colSums(otu_table(ps)))
-totReads_b
-round(colSums(otu_table(ps))/totReads_b,3)
-```
-
-
-### Prune out Plant
-```{r}
-#table(width(ps@refseq))
-#hist(width(ps@refseq), breaks = 20)
-#peaks at 242, 249-256, 272, 275
-
-# note - so after going through a lot of forums, and looking at the data. Sometimes this much length variation is a problem, and sometimes it is realy biological (so trimming only by length may not work)
-
-ps                  #428 taxa
-ps_filter0a <- subset_taxa(ps, domain != "Eukaryota")  #remove 70 Eukaryota/Planta asvs
-ps_filter0a  #leaves 358 taxa
-ps_filter0b <- subset_taxa(ps_filter0a, domain != "Archaea") # remove 35 low confidence archaea
-ps_filter0b  #leaves 323 taxa
-ps_filter0c <- subset_taxa(ps_filter0b, phylum != "Cyanobacteriota") # remove 117 Cyanobacteria/Chloroplasts
-ps_filter0c  #leaves 206 taxza
-## Examine 66 low confidence phylum level. Low confidence <0.70 
-tax_b0 %>% filter(ASV %in% taxa_names(ps_filter0c)) %>%
-    filter(conf.p < 0.70) %>% select(ASV) %>% unname %>% t %>% unname %>% c -> lowConfASVs
-ps_lowConf <- prune_taxa(taxa_names(ps_filter0c) %in% lowConfASVs, ps_filter0c) 
-# writeXStringSet(refseq(ps_lowConf),
-#                 filepath = "./data/R1Bact_lowConfSeqs.fasta")
-# write.csv(taxa_names(ps_lowConf), "./data/R1Bact_lowConfSeqs.csv")
-lowConfASVs2 <- read.csv("./data/R1Bact_lowConfSeqs-edit.csv", row.names = 1)
-remove <- lowConfASVs2$ASV[lowConfASVs2$toRemove == 'yes']
-
-# filtered dataset
-ps_filter0d <- prune_taxa(taxa_names(ps_filter0c) %nin% remove, ps_filter0c) # remove 62 non-bacteria
-ps_filter0d    #leaves 144 taxa
-```
-
-
-### Examine Controls
-```{r}
-#sort(rowSums(otu_table(ps_filter0d)))
-otu_table(ps_filter0d)["B-PCR2Blk","bASV2"] #1 read contamination in PCR2 that belongs to bASV2
-otu_table(ps_filter0d)["B-BactMock", c("bASV7", "bASV85")]  # 2 ASVs in the Mock sample
-otu_table(ps_filter0d)[, c("bASV7", "bASV85")]
-
-ps_filter <- prune_samples(sample_names(ps_filter0d) %nin%  c("B-BactMock", "B-PCR2Blk", "B-PCR1Blk"), ps_filter0d)
-ps_filter <- prune_taxa(taxa_names(ps_filter) %nin% c("bASV7", "bASV85"), ps_filter)
-#colSums(otu_table(ps_filter))
-
-#save(ps_filter, file="./data/R1Bact_ps_filter.RData")
-
-```
-
-* Only 1 read contamination in PCR2 that belongs to abundand bASV2. However, there are no other ASVs with that few reads.
-* 2 ASVs match to positive control used in Bacterial Mock (Whitaker A30 Bacillus strain). Both taxonomic matches to Bacillus. ASV85 is only in the mock sample. ASV7 is in two other samples, B-J-T5-1-4 and B-H-Twn-12. 48 and 24 reads, respectively. One of these samples was adjacent to the Mock on the DNA plate, but the other was not. Just going to remove this ASV from the analysis in its entirety.
-
-* Last note, may need to keep an eye on the Buchnera in this dataset
-
-
-```{r}
-
-top20 <- names(sort(taxa_sums(ps_filter), decreasing=TRUE))[1:20]
-ps.top20 <- transform_sample_counts(ps_filter, function(OTU) OTU/sum(OTU))
-ps.top20 <- prune_taxa(top20, ps.top20)
-plot_bar(ps.top20, x="Strain", fill="genus") + facet_wrap(~Chamber.Rep, scales="free_x")
-
-
-ps_filter@sam_data$StrainChamber <- factor(paste(ps_filter@sam_data$Strain,
-                                       ps_filter@sam_data$Chamber.Rep,
-                                       sep = "_"))
-
-ps_strain <- merge_samples(ps_filter, "StrainChamber")
-ps_strain@sam_data$StrainChamber <- sample_names(ps_strain)
-
-top20 <- names(sort(taxa_sums(ps_strain), decreasing=TRUE))[1:20]
-ps.top20 <- transform_sample_counts(ps_strain, function(OTU) OTU/sum(OTU))
-ps.top20 <- prune_taxa(top20, ps.top20)
-plot_bar(ps.top20, x="StrainChamber", fill="genus")
-
-```
-
-
 
 
 ```{r session}

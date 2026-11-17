@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE, fig.width=3.5, fig.height=3,
 * Run using `r version[['version.string']] `.
 
 # Objective
-This document reports on the **fungal bioinformatics analysis** of the R1 experiment performed in the Fall of 2023 (completed Dec 2023). Data represents the output of Miseq sequencing run of the Tri5 Mutant Microbiome project (Guixia Hao & Briana K. Whitaker). 
+This document reports on the **fungal bioinformatics analysis** of the R1 experiment performed in the Fall of 2023 (completed Dec 2023). Data represents the output of Miseq sequencing run of the Tri5 Mutant Microbiome project. 
 
 
 # 0) Load Packages, set path to data
@@ -128,7 +128,6 @@ rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[5]]),
     REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[5]]),
     REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[5]]))
 #F-H-PH-1-12       Forward Complement Reverse RevComp
-#                  Forward Complement Reverse RevComp
 # FWD.ForwardReads  136611          0       0      18
 # FWD.ReverseReads      21          0       0   49165
 # REV.ForwardReads       0          0       0  130425
@@ -137,7 +136,7 @@ rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[5]]),
 
 # 2) Remove Primers
 ```{r cutadaptSetup, results='hide', echo=FALSE}
-cutadapt <- "C:/Users/Briana.Whitaker/AppData/Roaming/Python/Python310/Scripts/cutadapt.exe" #change to location on your machine
+cutadapt <- "C:/path/to/cutadapt.exe" #change to location on your machine
 system2(cutadapt, args = "--version") #v.4.0
 
 path.cut <- file.path(path, "cutadapt-")
@@ -180,7 +179,6 @@ rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[5]]),
 cutFs <- sort(list.files(path.cut, pattern = "R1_001.fastq.gz", full.names = TRUE))
 cutRs <- sort(list.files(path.cut, pattern = "R2_001.fastq.gz", full.names = TRUE))
 
-#Sample.ID
 ```
 
 ### Inspect Quality Plots
@@ -198,8 +196,6 @@ plotQualityProfile(cutFs[c(5:6,20:21)])
 plotQualityProfile(cutRs[c(5:6,10:11)])
 #dev.off()
 ```
-
-* lower quality then I would have hoped for
 
 
 # 3) Filter and Trim
@@ -228,7 +224,6 @@ out
 #sum(out[,2])/sum(out[,1]) #~57% retained
 ```
 
-* Looks like about 43% of reads are being lost.
 
 ```{r writeout, results='hide', echo=FALSE}
 #write.csv(out, "./intermediate/R1Fung-SecondFilteringStep.csv")
@@ -411,9 +406,6 @@ hist(track$postChimera)
 
 ```
 
-* A lot/Most of the Tween Treatment samples (both chambers) had <1500 reads
-* Neither PCR1 or PCR2 negative control had reads by end of processing (and only a few to begin with )
-
 
 # 8) Create ps object
 
@@ -461,78 +453,6 @@ ps
 ```
 
 * Number of unique ASVs: `r length(getUniques(seqtab.nochim))`
-
-
-```{r}
-totReads_f <- sum(colSums(otu_table(ps)))
-round(colSums(otu_table(ps))/totReads_f,3)
-```
-
-* ASV1 is 98% of sequences in this run. RDP matches to Fusarium
-* ASV2 has 1% of reads, this is Alternaria.
-* The remaining 64 ASVs contribute <0.002% each
-
-
-### Examine Controls
-
-```{r}
-sort(rowSums(otu_table(ps)))
-
-otu_table(ps)["F-FunMock", c("fASV1", "fASV2", "fASV3", "fASV4", "fASV5", 
-        "fASV7", "fASV8", "fASV9", "fASV10", "fASV11", "fASV12", "fASV14",
-        "fASV15", "fASV19", "fASV25", "fASV27", "fASV28", "fASV30", "fASV32", 
-        "fASV33", "fASV35", "fASV36", "fASV42", "fASV62")]  
-otu_table(ps)[, c("fASV1", "fASV2", "fASV3", "fASV4", "fASV5", 
-        "fASV7", "fASV8", "fASV9", "fASV10", "fASV11", "fASV12", "fASV14",
-        "fASV15", "fASV19", "fASV25", "fASV27", "fASV28", "fASV30", "fASV32", 
-        "fASV33", "fASV35", "fASV36", "fASV42", "fASV62")]
-
-#fASV2: F-H-Twn-1, F-H-Twn-12, F-H-Twn-4, F-H-Twn-6, F-J-Twn-11, F-J-Twn-2, F-J-Twn-7
-#fASV42 : F-H-Twn-6  
-
-
-ps_filter <- prune_samples(sample_names(ps) %nin%  c("F-FunMock"), ps)
-ps_filter <- prune_taxa(taxa_names(ps_filter) %nin% c("fASV3", "fASV4", "fASV5",  #remove 21 ASVs only in mock
-        "fASV7", "fASV8", "fASV9", "fASV10", "fASV11", "fASV12", "fASV14",
-        "fASV15", "fASV19", "fASV25", "fASV27", "fASV28", "fASV30", "fASV32", 
-        "fASV33", "fASV35", "fASV36", "fASV62"), ps_filter)  #"fASV1", "fASV2", "fASV42", 
-#colSums(otu_table(ps_filter))
-
-#save(ps_filter, file="./data/R1Fung_ps_filter.RData")
-
-```
-
-
-```{r}
-top20 <- names(sort(taxa_sums(ps_filter), decreasing=TRUE))[1:20]
-ps.top20 <- transform_sample_counts(ps_filter, function(OTU) OTU/sum(OTU))
-ps.top20 <- prune_taxa(top20, ps.top20)
-plot_bar(ps.top20, x="Strain", fill="genus") + facet_wrap(~Chamber.Rep, scales="free_x")
-
-
-ps_filter@sam_data$StrainChamber <- factor(paste(ps_filter@sam_data$Strain,
-                                       ps_filter@sam_data$Chamber.Rep,
-                                       sep = "_"))
-
-ps_strain <- merge_samples(ps_filter, "StrainChamber")
-ps_strain@sam_data$StrainChamber <- sample_names(ps_strain)
-
-top20 <- names(sort(taxa_sums(ps_strain), decreasing=TRUE))[1:20]
-ps.top20 <- transform_sample_counts(ps_strain, function(OTU) OTU/sum(OTU))
-ps.top20 <- prune_taxa(top20, ps.top20)
-plot_bar(ps.top20, x="StrainChamber", fill="genus")
-
-
-#ps_strain@otu_table/rowSums(ps_strain@otu_table)
-
-
-ps_noFg <- prune_taxa(taxa_names(ps_filter) != 'fASV1', ps_filter)
-top20 <- names(sort(taxa_sums(ps_noFg), decreasing=TRUE))[1:20]
-ps.top20 <- transform_sample_counts(ps_noFg, function(OTU) OTU/sum(OTU))
-ps.top20 <- prune_taxa(top20, ps.top20)
-plot_bar(ps.top20, x="Strain", fill="genus") + facet_wrap(~Chamber.Rep, scales="free_x")
-
-```
 
 
 ```{r session}
