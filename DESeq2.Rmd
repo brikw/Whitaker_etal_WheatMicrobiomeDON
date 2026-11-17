@@ -22,8 +22,6 @@ knitr::opts_chunk$set(echo = TRUE, fig.width=3.5, fig.height=3,
 # Objective
 This document reports on the **differential abundance analysis** of the R1 experiment performed in the Fall of 2023 (completed Dec 2023) and R2 experiment performed in the Spring of 2024 (completed spring/summer 2024). Data represents the output of Miseq (R1) and NextSeq (R2) sequencing run of the Tri5 Mutant Microbiome project (Guixia Hao & Briana K. Whitaker & Nick Rhoades). 
 
-* Run this code two ways: 1) with no filtering of taxa by sequencing read counts, 2) with some filtering (except for r1f which has too few taxa to adequately filter) 
-
 
 ```{r PRELOAD, echo=FALSE, results='hide', include=FALSE} 
 x<-c("ggplot2", "phyloseq", "DESeq2",  "tidyr", "dplyr", "ggVennDiagram", "Biostrings",
@@ -92,7 +90,7 @@ dds_r2b_main <- estimateSizeFactors(dds_r2b_main,
 dds_r2b_main <- DESeq(dds_r2b_main, test="Wald", fitType="local") #embedded dispersion estimates
 plotDispEsts(dds_r2b_main)
 ```
-* IF we filter out taxa that do not have at least 2 reads across each of 6 samples
+* If we filter out taxa that do not have at least 2 reads across each of 6 samples
     * r1b 20/136 taxa
     * r1f 5/35 taxa **don't filter, too few taxa
     * r2b 28/641 taxa
@@ -135,8 +133,6 @@ plotDispEsts(dds_r2b_main)
 # plotDispEsts(dds_r2f_main)
 
 ```
-
-
 
 ### Wald Tests - log2 fold changes due to main effects
 * BH correction for FDR already used as default in wald tests
@@ -270,7 +266,6 @@ table(l2fc_signif$log2FoldChange>0, l2fc_signif$Contrast)
 
 
 ### Bar Plot
-* https://forum.posit.co/t/preserve-constant-bar-widths-for-uneven-faceted-plots/26837 to get bars same width across facets
 ```{r, results = 'hide', echo = FALSE, fig.width = 9, fig.height = 9}
 taxa_col <- c("#1B9E77", "#D95F02", "#E7298A", "#7570B3", "#377EB8", "#66A61E", "#E6AB02", "#A6761D")
 
@@ -338,10 +333,6 @@ Heatmap(sub_w,
         clustering_distance_rows = "pearson",
         clustering_method_rows = "ward.D2",
         cluster_columns = FALSE)
-
-
-#c("#CC79A7", "#D55E00", "#0072B2", "#F0E442", "#009E73", "#56B4E9", "#E69F00", "#000000")
-
 ```
 
 
