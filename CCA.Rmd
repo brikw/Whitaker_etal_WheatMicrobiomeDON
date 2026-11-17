@@ -1,0 +1,502 @@
+---
+title: "CCA Fungi & Bacteria"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+author: "Briana K. Whitaker"
+date: "`r Sys.Date()`"
+---
+\fontsize{9}{10}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=3.5, fig.height=3,
+                      warning=FALSE, message=FALSE)
+```
+---
+
+* Run using `r version[['version.string']] `.
+
+# OBJECTIVE
+This document reports on the **direct gradient analysis using CCA** of the combined R1 experiment performed in the Fall of 2023 (completed Dec 2023) and R2 experiment performed in the Spring of 2024 (completed June 2024). Data represents the output of Miseq (R1) and NextSeq (R2) sequencing run of the Tri5 Mutant Microbiome project (Guixia Hao & Briana K. Whitaker & Nick Rhoades). 
+
+
+```{r, echo=FALSE, results='hide', include=FALSE} 
+x<-c("ggplot2", "phyloseq", "dplyr", "RColorBrewer", "DESeq2", "vegan", "RRPP",
+     "viridis")
+lapply(x, require, character.only = TRUE)
+
+#set seed
+set.seed(128)
+
+#Load functions
+source("./code/multiplot.function.R")
+`%nin%` = Negate(`%in%`)
+
+# set ggplot2 theme
+theme_set(theme_bw(base_size=12)) 
+theme_update(panel.grid.major=element_line(0), panel.grid.minor=element_line(0))
+
+strain_col <- c("#D95F02", "#7570B3", "#1B9E77") #brewer.pal(3, name = "Dark2")
+
+```
+
+# Load Phyloseq
+```{r}
+load("./data/ps_r1b_curated2.RData"); ps_r1b
+load("./data/ps_r1f_curated2.RData"); ps_r1f
+load("./data/ps_r2b_curated2.RData"); ps_r2b
+load("./data/ps_r2f_curated2.RData"); ps_r2f
+```
+
+
+```{r, echo=FALSE, results='hide'}
+SbyE_r1b <- (as(sample_data(ps_r1b), "data.frame"))
+SbyE_r1f <- (as(sample_data(ps_r1f), "data.frame"))
+SbyE_r2b <- (as(sample_data(ps_r2b), "data.frame"))
+SbyE_r2f <- (as(sample_data(ps_r2f), "data.frame"))
+
+SbyS_r1b <- (as(otu_table(ps_r1b), "matrix"))
+SbyS_r1f <- (as(otu_table(ps_r1f), "matrix"))
+SbyS_r2b <- (as(otu_table(ps_r2b), "matrix"))
+SbyS_r2f <- (as(otu_table(ps_r2f), "matrix"))
+```
+
+```{r, include = FALSE}
+#first make Strain names shorter,
+levels(SbyE_r1b$Strain) <- c("PH1", "Tri5", "Cont")
+levels(SbyE_r1f$Strain) <- c("PH1", "Tri5", "Cont")
+levels(SbyE_r2b$Strain) <- c("PH1", "Tri5", "Cont")
+levels(SbyE_r2f$Strain) <- c("PH1", "Tri5", "Cont")
+
+# change chamber names
+levels(SbyE_r1b$Chamber.Rep) <- c("C1", "C2")  #H now C1, J now C2
+levels(SbyE_r1f$Chamber.Rep) <- c("C1", "C2")
+levels(SbyE_r2b$Chamber.Rep) <- c("C1", "C2")
+levels(SbyE_r2f$Chamber.Rep) <- c("C1", "C2")
+
+# then make combo treatment
+SbyE_r1b$Strain_Chamber <- as.factor(paste(SbyE_r1b$Strain, SbyE_r1b$Chamber.Rep, sep = "_"))
+SbyE_r1f$Strain_Chamber <- as.factor(paste(SbyE_r1f$Strain, SbyE_r1f$Chamber.Rep, sep = "_"))
+SbyE_r2b$Strain_Chamber <- as.factor(paste(SbyE_r2b$Strain, SbyE_r2b$Chamber.Rep, sep = "_"))
+SbyE_r2f$Strain_Chamber <- as.factor(paste(SbyE_r2f$Strain, SbyE_r2f$Chamber.Rep, sep = "_"))
+
+# and change order
+SbyE_r1b$Strain_Chamber <- factor(SbyE_r1b$Strain_Chamber, 
+    levels = c("PH1_C1",  "PH1_C2",  "Tri5_C1", "Tri5_C2", "Cont_C1", "Cont_C2") )
+SbyE_r1f$Strain_Chamber <- factor(SbyE_r1f$Strain_Chamber, 
+    levels = c("PH1_C1",  "PH1_C2",  "Tri5_C1", "Tri5_C2", "Cont_C1", "Cont_C2") )
+SbyE_r2b$Strain_Chamber <- factor(SbyE_r2b$Strain_Chamber, 
+    levels = c("PH1_C1",  "PH1_C2",  "Tri5_C1", "Tri5_C2", "Cont_C1", "Cont_C2") )
+SbyE_r2f$Strain_Chamber <- factor(SbyE_r2f$Strain_Chamber, 
+    levels = c("PH1_C1",  "PH1_C2",  "Tri5_C1", "Tri5_C2", "Cont_C1", "Cont_C2") )
+
+```
+
+
+
+
+```{r, echo=FALSE, results='hide'}
+load("./data/Tri5MB_dds_r1b.RData")
+load("./data/Tri5MB_dds_r1f.RData")
+load("./data/Tri5MB_dds_r2b.RData")
+load("./data/Tri5MB_dds_r2f.RData")
+
+
+## VST & Euclidean of VST
+VST_r1b <- getVarianceStabilizedData(dds_r1b)
+VST_r1b <- t(VST_r1b)  #taxa as columns
+dist_r1b <- stats::dist(VST_r1b, method="euclidean")
+
+VST_r1f <- getVarianceStabilizedData(dds_r1f)
+VST_r1f <- t(VST_r1f)  #taxa as columns
+dist_r1f <- stats::dist(VST_r1f, method="euclidean")
+
+VST_r2b <- getVarianceStabilizedData(dds_r2b)
+VST_r2b <- t(VST_r2b)  #taxa as columns
+dist_r2b <- stats::dist(VST_r2b, method="euclidean")
+
+VST_r2f <- getVarianceStabilizedData(dds_r2f)
+VST_r2f <- t(VST_r2f)  #taxa as columns
+dist_r2f <- stats::dist(VST_r2f, method="euclidean")
+
+# no Fus versions
+ps_noFus_r1f <- prune_taxa(taxa_names(ps_r1f)[taxa_names(ps_r1f) != "ASV1"] , ps_r1f)
+
+ps_noFus_r2f <- prune_taxa(taxa_names(ps_r2f)[taxa_names(ps_r2f) != "ASV1"] , ps_r2f)
+load("./data/Tri5MB_dds_noFus_r2f.RData")
+VST_noFus_r2f <- getVarianceStabilizedData(dds_noFus_r2f)
+VST_noFus_r2f <- t(VST_noFus_r2f)  #taxa as columns
+dist_noFus_r2f <- stats::dist(VST_noFus_r2f, method="euclidean")
+```
+
+# CCA
+#### PH1 & Tri5 mutant treatments only
+```{r, include = FALSE}
+SbyE_r1b %>% filter(Strain == "PH1" | Strain == "Tri5") %>% 
+    select(FgTa_ratio, ugDON_per_g) %>% as.matrix -> SbyE_r1b_sub 
+
+SbyE_r1f %>% filter(Strain == "PH1" | Strain == "Tri5") %>% 
+    select(FgTa_ratio, ugDON_per_g) %>% as.matrix -> SbyE_r1f_sub 
+
+SbyE_r2b %>% filter(Strain == "PH1" | Strain == "Tri5") %>% 
+    select(FgTa_ratio, ugDON_per_g) %>% as.matrix -> SbyE_r2b_sub 
+
+SbyE_r2f %>% filter(Strain == "PH1" | Strain == "Tri5") %>% 
+    select(FgTa_ratio, ugDON_per_g) %>% as.matrix -> SbyE_r2f_sub 
+
+# # check correlations (same for b and f, within rounds)
+# cor(SbyE_r1b_sub) # 0.616
+# cor(SbyE_r2b_sub) # 0.783
+
+VST_r1b[rownames(VST_r1b) %in% rownames(SbyE_r1b_sub), ] -> VST_r1b_sub
+VST_r1f[rownames(VST_r1f) %in% rownames(SbyE_r1f_sub), ] -> VST_r1f_sub
+VST_r2b[rownames(VST_r2b) %in% rownames(SbyE_r2b_sub), ] -> VST_r2b_sub
+VST_r2f[rownames(VST_r2f) %in% rownames(SbyE_r2f_sub), ] -> VST_r2f_sub
+```
+
+#### tweak to r2b
+* for this dataset only, VST is causing an error in CCA, rowSums (sample sums) have a lot of negative values. 
+```{r r2bFix, results = 'hide'}
+min(VST_r2b_sub) #-2.926381   # NOTE - all other dataframes, this min value is positive
+
+# add value across matrix
+VST_r2b_sub <- VST_r2b_sub + 3
+```
+
+
+## Permutation tests
+```{r}
+## CCA
+cca_r1b <- vegan::cca(VST_r1b_sub ~ SbyE_r1b_sub )
+cca_r1f <- vegan::cca(VST_r1f_sub ~ SbyE_r1f_sub )
+cca_r2b <- vegan::cca(VST_r2b_sub ~ SbyE_r2b_sub )
+cca_r2f <- vegan::cca(VST_r2f_sub ~ SbyE_r2f_sub )
+```
+
+### for the constrained ordination
+```{r}
+cca_fit_r1b <- envfit(cca_r1b, SbyE_r1b_sub, perm = 999); cca_fit_r1b
+cca_fit_r1f <- envfit(cca_r1f, SbyE_r1f_sub, perm = 999); cca_fit_r1f
+cca_fit_r2b <- envfit(cca_r2b, SbyE_r2b_sub, perm = 999); cca_fit_r2b
+cca_fit_r2f <- envfit(cca_r2f, SbyE_r2f_sub, perm = 999); cca_fit_r2f
+#both variables signif in all cases
+```
+
+### for cca under reduced model (Marginal tests for axes)
+```{r}
+anova(cca_r1b, by = "axis", permutations = (nperm=999))   #CCA1 signif
+anova(cca_r1f, by = "axis", permutations = (nperm=999))   #CCA1 signif (.050)
+anova(cca_r2b, by = "axis", permutations = (nperm=999))   #CCA1 signif
+anova(cca_r2f, by = "axis", permutations = (nperm=999))   #no axis signif
+```
+
+### for species abundances across axes
+```{r}
+#1b
+SbyS_r1b_sub <- SbyS_r1b[rownames(SbyS_r1b) %in% rownames(SbyE_r1b_sub), ]
+SbyS_r1b_sub <- SbyS_r1b_sub[, colSums(SbyS_r1b_sub) >0]
+SbyS_rel_r1b <- data.frame(decostand(SbyS_r1b_sub, method = 'total')) # on rel. abun.
+cca_fitSpp_r1b <- envfit(cca_r1b, SbyS_rel_r1b, perm = 999) 
+signif_asvs_r1b <- names(cca_fitSpp_r1b$vectors$pvals)[cca_fitSpp_r1b$vectors$pvals<=0.01]
+length(signif_asvs_r1b)
+
+#1f
+SbyS_r1f_sub <- SbyS_r1f[rownames(SbyS_r1f) %in% rownames(SbyE_r1f_sub), ]
+SbyS_r1f_sub <- SbyS_r1f_sub[, colSums(SbyS_r1f_sub) >0]
+SbyS_rel_r1f <- data.frame(decostand(SbyS_r1f_sub, method = 'total')) # on rel. abun.
+cca_fitSpp_r1f <- envfit(cca_r1f, SbyS_rel_r1f, perm = 999) 
+signif_asvs_r1f <- names(cca_fitSpp_r1f$vectors$pvals)[cca_fitSpp_r1f$vectors$pvals<=0.01]
+length(signif_asvs_r1f)
+
+#2b
+SbyS_r2b_sub <- SbyS_r2b[rownames(SbyS_r2b) %in% rownames(SbyE_r2b_sub), ]
+SbyS_r2b_sub <- SbyS_r2b_sub[, colSums(SbyS_r2b_sub) >0]
+SbyS_rel_r2b <- data.frame(decostand(SbyS_r2b_sub, method = 'total')) # on rel. abun.
+cca_fitSpp_r2b <- envfit(cca_r2b, SbyS_rel_r2b, perm = 999)
+signif_asvs_r2b <- names(cca_fitSpp_r2b$vectors$pvals)[cca_fitSpp_r2b$vectors$pvals<=0.01]
+length(signif_asvs_r2b)
+
+#2f
+SbyS_r2f_sub <- SbyS_r2f[rownames(SbyS_r2f) %in% rownames(SbyE_r2f_sub), ]
+SbyS_r2f_sub <- SbyS_r2f_sub[, colSums(SbyS_r2f_sub) >0]
+SbyS_rel_r2f <- data.frame(decostand(SbyS_r2f_sub, method = 'total')) # on rel. abun.
+cca_fitSpp_r2f <- envfit(cca_r2f, SbyS_rel_r2f, perm = 999) 
+signif_asvs_r2f <- names(cca_fitSpp_r2f$vectors$pvals)[cca_fitSpp_r2f$vectors$pvals<=0.01]
+length(signif_asvs_r2f)
+```
+* For significant taxa, if pval < 0.05 then: r1b 30, r1f 7, r2b 69, r2f 34 
+* but fewer signif taxa if pval < 0.01
+
+
+### Create dataframes
+```{r, include = FALSE}
+## constrained eigs divided by sum of constrained + unconstrained/residual eigs
+explain_r1b <- round(cca_r1b$CCA$eig/sum(c(cca_r1b$CCA$eig,cca_r1b$CA$eig)),3)*100; explain_r1b
+explain_r1f <- round(cca_r1f$CCA$eig/sum(c(cca_r1f$CCA$eig,cca_r1f$CA$eig)),3)*100; explain_r1f
+explain_r2b <- round(cca_r2b$CCA$eig/sum(c(cca_r2b$CCA$eig,cca_r2b$CA$eig)),3)*100; explain_r2b
+explain_r2f <- round(cca_r2f$CCA$eig/sum(c(cca_r2f$CCA$eig,cca_r2f$CA$eig)),3)*100; explain_r2f
+
+
+## dataframe of weighted average sample scores
+#1b
+cca_samp_r1b <- data.frame(scores(cca_r1b, display = "wa"))
+cca_samp_r1b$ids <- rownames(cca_samp_r1b) 
+cca_samp_r1b <- merge(cca_samp_r1b, SbyE_r1b, 
+            by.x = "ids", by.y = "Sample_ID", all.x = TRUE, all.y = FALSE)
+#1f
+cca_samp_r1f <- data.frame(scores(cca_r1f, display = "wa"))
+cca_samp_r1f$ids <- rownames(cca_samp_r1f) 
+cca_samp_r1f <- merge(cca_samp_r1f, SbyE_r1f, 
+            by.x = "ids", by.y = "Sample_ID", all.x = TRUE, all.y = FALSE)
+#2b
+cca_samp_r2b <- data.frame(scores(cca_r2b, display = "wa"))
+cca_samp_r2b$ids <- rownames(cca_samp_r2b)
+cca_samp_r2b <- merge(cca_samp_r2b, SbyE_r2b,
+            by.x = "ids", by.y = "Sample_ID", all.x = TRUE, all.y = FALSE)
+# 2f
+cca_samp_r2f <- data.frame(scores(cca_r2f, display = "wa"))
+cca_samp_r2f$ids <- rownames(cca_samp_r2f) 
+cca_samp_r2f <- merge(cca_samp_r2f, SbyE_r2f, 
+            by.x = "ids", by.y = "Sample_ID", all.x = TRUE, all.y = FALSE)
+
+
+## dataframe of environmental vectors
+#1b
+cca_vec_r1b <- data.frame(scores(cca_r1b, display = "bp")) #biplot scores
+rownames(cca_vec_r1b) <- c(colnames(SbyE_r1b_sub))
+cca_vec_r1b$vecs <- rownames(cca_vec_r1b)
+#1f
+cca_vec_r1f <- data.frame(scores(cca_r1f, display = "bp")) #biplot scores
+rownames(cca_vec_r1f) <- c(colnames(SbyE_r1f_sub))
+cca_vec_r1f$vecs <- rownames(cca_vec_r1f)
+#2b
+cca_vec_r2b <- data.frame(scores(cca_r2b, display = "bp")) #biplot scores
+rownames(cca_vec_r2b) <- c(colnames(SbyE_r2b_sub))
+cca_vec_r2b$vecs <- rownames(cca_vec_r2b)
+#2f
+cca_vec_r2f <- data.frame(scores(cca_r2f, display = "bp")) #biplot scores
+rownames(cca_vec_r2f) <- c(colnames(SbyE_r2f_sub))
+cca_vec_r2f$vecs <- rownames(cca_vec_r2f)
+
+
+## dataframe of species (ASV) scores (scaled to results scores)
+## subset to only significant ones
+#1b
+cca_spp_r1b <- data.frame(scores(cca_r1b, display = "species", scaling = "sites")) 
+cca_spp_r1b$asvs <- rownames(cca_spp_r1b) 
+cca_spp_signif_r1b <- cca_spp_r1b %>% filter(asvs %in% signif_asvs_r1b)
+#1f
+cca_spp_r1f <- data.frame(scores(cca_r1f, display = "species", scaling = "sites")) 
+cca_spp_r1f$asvs <- rownames(cca_spp_r1f) 
+cca_spp_signif_r1f <- cca_spp_r1f %>% filter(asvs %in% signif_asvs_r1f)
+#2b
+cca_spp_r2b <- data.frame(scores(cca_r2b, display = "species", scaling = "sites"))
+cca_spp_r2b$asvs <- rownames(cca_spp_r2b)
+cca_spp_signif_r2b <- cca_spp_r2b %>% filter(asvs %in% signif_asvs_r2b)
+#2f
+cca_spp_r2f <- data.frame(scores(cca_r2f, display = "species", scaling = "sites")) 
+cca_spp_r2f$asvs <- rownames(cca_spp_r2f) 
+cca_spp_signif_r2f <- cca_spp_r2f %>% filter(asvs %in% signif_asvs_r2f)
+```
+
+
+### Initial Figure
+* tri-plots
+```{r, results = 'hide', echo = FALSE}
+# Tri-plot
+c_r1b <- ggplot() + #coord_equal() + 
+    # samples
+    geom_point(data = cca_samp_r1b, aes(x = CCA1, y = CCA2, 
+        color = Strain, shape = Chamber.Rep) , size = 3) +
+    # species
+    geom_text(data = cca_spp_signif_r1b, aes(x = CCA1, y = CCA2, label = asvs), 
+        size = 3) +
+    # env vectors
+    geom_segment(data = cca_vec_r1b, 
+         aes(x = 0, xend = CCA1, y = 0, yend = CCA2),
+         arrow = arrow(length = unit(0.25, "cm")), linewidth = 0.8,
+         colour = "gray30", linetype = 1 ) +
+    geom_text(data = cca_vec_r1b,
+         aes(x = c(CCA1-0.4), y = c(CCA2-0.2), label = vecs),
+         size = 5, colour = "gray30", fontface = 'bold') +
+    scale_colour_manual("", values = strain_col) +
+    scale_x_continuous(paste("CCA Axis-1 (", explain_r1b[1], "%)", sep = "")) +
+    scale_y_continuous(paste("CCA Axis-2 (", explain_r1b[2], "%)", sep = "")) +
+    theme(legend.position = 'bottom') +
+    guides(color = 'none', shape = 'none')
+c_r1f <- ggplot() + #coord_equal() + 
+    # samples
+    geom_point(data = cca_samp_r1f, aes(x = CCA1, y = CCA2, 
+        color = Strain, shape = Chamber.Rep) , size = 3) +
+    # species
+    geom_text(data = cca_spp_signif_r1f, aes(x = CCA1, y = CCA2, label = asvs), 
+        size = 3) +
+    # env vectors
+    geom_segment(data = cca_vec_r1f, 
+         aes(x = 0, xend = CCA1, y = 0, yend = CCA2),
+         arrow = arrow(length = unit(0.25, "cm")), linewidth = 0.8,
+         colour = "gray30", linetype = 1 ) +
+    geom_text(data = cca_vec_r1f,
+         aes(x = c(CCA1-0.4), y = c(CCA2-0.2), label = vecs),
+         size = 5, colour = "gray30", fontface = 'bold') +
+    scale_colour_manual("", values = strain_col) +
+    scale_x_continuous(paste("CCA Axis-1 (", explain_r1f[1], "%)", sep = "")) +
+    scale_y_continuous(paste("CCA Axis-2 (", explain_r1f[2], "%)", sep = "")) +
+    theme(legend.position = 'bottom') +
+    guides(color = 'none', shape = 'none')
+c_r2b <- ggplot() + #coord_equal() +
+    # samples
+    geom_point(data = cca_samp_r2b, aes(x = CCA1, y = CCA2,
+        color = Strain, shape = Chamber.Rep) , size = 3) +
+    # species
+    geom_text(data = cca_spp_signif_r2b, aes(x = CCA1, y = CCA2, label = asvs),
+        size = 3) +
+    # env vectors
+    geom_segment(data = cca_vec_r2b,
+         aes(x = 0, xend = CCA1, y = 0, yend = CCA2),
+         arrow = arrow(length = unit(0.25, "cm")), linewidth = 0.8,
+         colour = "gray30", linetype = 1 ) +
+    geom_text(data = cca_vec_r2b,
+         aes(x = c(CCA1-0.4), y = c(CCA2-0.2), label = vecs),
+         size = 5, colour = "gray30", fontface = 'bold') +
+    scale_colour_manual("", values = strain_col) +
+    scale_x_continuous(paste("CCA Axis-1 (", explain_r2b[1], "%)", sep = "")) +
+    scale_y_continuous(paste("CCA Axis-2 (", explain_r2b[2], "%)", sep = "")) +
+    theme(legend.position = 'bottom') +
+    guides(color = 'none', shape = 'none')
+c_r2f <- ggplot() + #coord_equal() + 
+    # samples
+    geom_point(data = cca_samp_r2f, aes(x = CCA1, y = CCA2, 
+        color = Strain, shape = Chamber.Rep) , size = 3) +
+    # species
+    geom_text(data = cca_spp_signif_r2f, aes(x = CCA1, y = CCA2, label = asvs), 
+        size = 3) +
+    # env vectors
+    geom_segment(data = cca_vec_r2f, 
+         aes(x = 0, xend = CCA1, y = 0, yend = CCA2),
+         arrow = arrow(length = unit(0.25, "cm")), linewidth = 0.8,
+         colour = "gray30", linetype = 1 ) +
+    geom_text(data = cca_vec_r2f,
+         aes(x = c(CCA1-0.4), y = c(CCA2-0.2), label = vecs),
+         size = 5, colour = "gray30", fontface = 'bold') +
+    scale_colour_manual("Strain", values = strain_col) +
+    scale_shape_manual("Chamber", values = c(16,15)) +
+    scale_x_continuous(paste("CCA Axis-1 (", explain_r2f[1], "%)", sep = "")) +
+    scale_y_continuous(paste("CCA Axis-2 (", explain_r2f[2], "%)", sep = "")) +
+    theme(legend.position = 'inside', legend.position.inside = c(.85,.75), 
+          legend.spacing.y = unit(0, "cm"), legend.key.spacing.y = unit(0, "cm"))    ### NOTE! this legend covers 3 taxa names
+```
+
+```{r, echo = FALSE, fig.keep = 'all', fig.width = 9, fig.height = 9}
+#tiff("./figures/CCA_all_pval0.01.tiff", width=10, height=10, units="in", res=300)
+multiplot(c_r1b, c_r1f, c_r2b, c_r2f + guides(color = 'none', shape = 'none'), cols = 2)
+#dev.off()
+```
+
+
+## R2f - remove sample cluster w/ high Cladosporium
+```{r, fig.keep = 'none'}
+# remove samples with high proportional asv6 or high asv141
+ggplot() +
+    geom_text(data = cca_samp_r2f, aes(x = CCA1, y = CCA2, label = ids,
+        color = Strain) , size = 3) +
+    scale_colour_manual("", values = strain_col) +
+    xlim(2.5, 3.3) + ylim(-3,-1.9)
+# 9 PH1 (6 howard), 8 Tri5 (5 howard)
+cca_samp_r2f %>% filter(CCA1 > 2.5) %>% filter(CCA2 < -1.9) %>% 
+    pull(ids) %>% as.character -> to_remove
+
+# make new main datasets
+SbyE_r2f_sub2 <- SbyE_r2f_sub[rownames(SbyE_r2f_sub) %nin% to_remove,]
+VST_r2f_sub2 <- VST_r2f_sub[rownames(VST_r2f_sub) %nin% to_remove, ]
+
+# run cca
+cca_r2f_sub <- vegan::cca(VST_r2f_sub2 ~ SbyE_r2f_sub2 )
+# permutation tests:
+### for ordination
+cca_fit_r2f_sub <- envfit(cca_r2f_sub, SbyE_r2f_sub2, perm = 999) 
+cca_fit_r2f_sub #both variables signif
+### for cca under reduced model
+anova(cca_r2f_sub, by = "axis", permutations = (nperm=999))   #CCA1 semi-signif
+### for species abundances
+SbyS_r2f_sub2 <- SbyS_r2f[rownames(SbyS_r2f) %in% rownames(SbyE_r2f_sub2), ]
+SbyS_r2f_sub2 <- SbyS_r2f_sub2[, colSums(SbyS_r2f_sub2) >0]
+SbyS_rel_r2f_sub <- data.frame(decostand(SbyS_r2f_sub2, method = 'total')) # on rel. abun.
+cca_fitSpp_r2f_sub <- envfit(cca_r2f_sub, SbyS_rel_r2f_sub, perm = 999) 
+signif_asvs_r2f_sub <- names(cca_fitSpp_r2f_sub$vectors$pvals)[cca_fitSpp_r2f_sub$vectors$pvals<=0.01]
+length(signif_asvs_r2f_sub) #3
+```
+
+```{r, include = FALSE}
+# create dataframes
+explain_r2f_sub <- round(cca_r2f_sub$CCA$eig/sum(c(cca_r2f_sub$CCA$eig,cca_r2f_sub$CA$eig)),3)*100; explain_r2f_sub
+cca_samp_r2f_sub <- data.frame(scores(cca_r2f_sub, display = "wa"))
+cca_samp_r2f_sub$ids <- rownames(cca_samp_r2f_sub) 
+cca_samp_r2f_sub <- merge(cca_samp_r2f_sub, SbyE_r2f, 
+            by.x = "ids", by.y = "Sample_ID", all.x = TRUE, all.y = FALSE)
+cca_vec_r2f_sub <- data.frame(scores(cca_r2f_sub, display = "bp")) #biplot scores
+rownames(cca_vec_r2f_sub) <- c(colnames(SbyE_r2f_sub2))
+cca_vec_r2f_sub$vecs <- rownames(cca_vec_r2f_sub)
+
+cca_spp_r2f_sub <- data.frame(scores(cca_r2f_sub, display = "species", scaling = "sites")) 
+cca_spp_r2f_sub$asvs <- rownames(cca_spp_r2f_sub) 
+cca_spp_signif_r2f_sub <- cca_spp_r2f_sub %>% filter(asvs %in% signif_asvs_r2f_sub)
+
+#figure
+c_r2f_sub <- ggplot() + #coord_equal() + 
+    # samples
+    geom_point(data = cca_samp_r2f_sub, aes(x = CCA1, y = CCA2, 
+        color = Strain, shape = Chamber.Rep) , size = 3) +
+    # species
+    geom_text(data = cca_spp_signif_r2f_sub, aes(x = CCA1, y = CCA2, label = asvs), 
+        size = 3) +
+    # env vectors
+    geom_segment(data = cca_vec_r2f_sub, 
+         aes(x = 0, xend = CCA1, y = 0, yend = CCA2),
+         arrow = arrow(length = unit(0.25, "cm")), linewidth = 0.8,
+         colour = "gray30", linetype = 1 ) +
+    geom_text(data = cca_vec_r2f_sub,
+         aes(x = c(CCA1+0.4), y = c(CCA2+0.2), label = vecs),
+         size = 5, colour = "gray30", fontface = 'bold') +
+    scale_colour_manual("Strain", values = strain_col) +
+    scale_shape_manual("Chamber", values = c(16,15)) +
+    scale_x_continuous(paste("CCA Axis-1 (", explain_r2f_sub[1], "%)", sep = "")) +
+    scale_y_continuous(paste("CCA Axis-2 (", explain_r2f_sub[2], "%)", sep = "")) +
+    theme(legend.position = 'inside', legend.position.inside = c(.87,.75), 
+          legend.spacing.y = unit(0, "cm"), legend.key.spacing.y = unit(0, "cm")) 
+c_r2f_sub #+ guides(color = 'none', shape = 'none')
+```
+
+
+
+# For manuscript
+
+### Final Composite Figure
+```{r, fig.keep = 'all', fig.width = 9, fig.height = 9}
+#tiff("./figures/CCA_all_pval0.01_altR2f.tiff", width=10, height=10, units="in", res=300)
+multiplot(c_r1b + ggtitle("A) R1 Bacteria"), c_r2b+ ggtitle("B) R2 Bacteria"), c_r1f+ ggtitle("C) R1 Fungi"), c_r2f_sub+ ggtitle("D) R2 Fungi"), cols = 2)
+#dev.off()
+
+```
+
+### Vector scores
+```{r}
+cca_vec_r1b
+cca_vec_r1f
+cca_vec_r2b
+cca_vec_r2f
+cca_vec_r2f_sub
+
+```
+
+
+```{r session}
+sessionInfo()
+```
+
+
+
+##### end
